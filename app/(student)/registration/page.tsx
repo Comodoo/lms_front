@@ -12,8 +12,9 @@ import { useRegistration } from '@/lib/registration-context';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { apiClient } from '@/lib/api-client';
 import * as z from 'zod';
 
 // Form schema for validation
@@ -52,13 +53,11 @@ const registrationSchema = z.object({
 
   // Program Information
   programId: z.string().min(1, 'Program is required'),
-  intake: z.string().min(1, 'Intake is required'),
-  studyMode: z.enum(['full_time', 'part_time', 'distance_learning']),
 
   // Guardian Information
   guardianName: z.string().min(2, 'Guardian name is required'),
   guardianPhone: z.string().min(10, 'Guardian phone is required'),
-  guardianEmail: z.string().email('Invalid guardian email'),
+  guardianEmail: z.string().email('Invalid guardian email').optional().or(z.literal('')),
   guardianRelationship: z.string().min(2, 'Relationship is required'),
   guardianAddress: z.string().min(5, 'Guardian address is required'),
 });
@@ -75,8 +74,16 @@ const steps = [
 
 export default function RegistrationPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const { programs, createRegistration, uploadDocument } = useRegistration();
+  const [applicableFees, setApplicableFees] = useState<any[]>([]);
+  const { programs, createRegistration, uploadDocument, registrations } = useRegistration();
   const router = useRouter();
+
+  // Redirect if already registered
+  useEffect(() => {
+    if (registrations && registrations.length > 0) {
+      router.push(`/registration/${registrations[0].id}/payment`);
+    }
+  }, [registrations, router]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(registrationSchema),
@@ -97,36 +104,20 @@ export default function RegistrationPage() {
       academicQualifications: [
         {
           level: 'o_level',
-          institutionName: 'Azania Secondary School',
-          institutionAddress: 'Dares Salaam, Tanzania',
-          country: 'Tanzania',
-          startDate: '2018-01-10',
-          endDate: '2021-11-20',
-          examinationBoard: 'NECTA',
-          indexNumber: 'S0101/0001/2021',
-          grade: 'Division I',
-          gpa: '1.2',
-          major: 'Science',
-          document: null,
-        },
-        {
-          level: 'a_level',
-          institutionName: 'Tabora Boys High School',
-          institutionAddress: 'Tabora, Tanzania',
-          country: 'Tanzania',
-          startDate: '2022-07-15',
-          endDate: '2024-05-30',
-          examinationBoard: 'NECTA',
-          indexNumber: 'S0101/0501/2024',
-          grade: 'Division I',
-          gpa: '1.1',
-          major: 'PCM (Physics, Chemistry, Mathematics)',
+          institutionName: '',
+          institutionAddress: '',
+          country: '',
+          startDate: '',
+          endDate: '',
+          examinationBoard: '',
+          indexNumber: '',
+          grade: '',
+          gpa: '',
+          major: '',
           document: null,
         },
       ],
-      programId: 'prog-1',
-      intake: 'September 2026',
-      studyMode: 'full_time',
+      programId: '',
       guardianName: '',
       guardianPhone: '',
       guardianEmail: '',
@@ -167,7 +158,7 @@ export default function RegistrationPage() {
         : currentStep === 2
         ? ['academicQualifications']
         : currentStep === 3
-        ? ['programId', 'intake', 'studyMode']
+        ? ['programId']
         : currentStep === 4
         ? ['guardianName', 'guardianPhone', 'guardianEmail', 'guardianRelationship', 'guardianAddress']
         : []
@@ -184,20 +175,8 @@ export default function RegistrationPage() {
 
   const onSubmit = async (data: FormValues) => {
     try {
-      // 1. Create registration record
-      const registration = await createRegistration(data);
-
-      // 2. Upload National ID document if exists
-      if (data.nationalIdDocument) {
-        await uploadDocument(registration.id, 'national_id', data.nationalIdDocument);
-      }
-
-      // 4. Upload each Academic qualification document
-      for (const qual of data.academicQualifications) {
-        if (qual.document) {
-          await uploadDocument(registration.id, 'academic_transcripts', qual.document);
-        }
-      }
+      // 1. Create registration record (now handles documents internally via FormData)
+      const registration = await createRegistration(data as any);
 
       // Redirect to payment
       router.push(`/registration/${registration.id}/payment`);
@@ -206,7 +185,24 @@ export default function RegistrationPage() {
     }
   };
 
-  const selectedProgram = programs.find(p => p.id === form.watch('programId'));
+  const selectedProgramId = form.watch('programId');
+  const selectedProgram = programs.find(p => p.id?.toString() === selectedProgramId?.toString());
+
+  useEffect(() => {
+    if (selectedProgramId) {
+      apiClient.getFees(selectedProgramId).then(data => {
+        setApplicableFees((data || []).filter((f: any) => f.type === 'tuition'));
+      }).catch(err => {
+        console.error('Failed to fetch fees:', err);
+        setApplicableFees([]);
+      });
+    } else {
+      apiClient.getFees().then(data => {
+        // Just direct fees
+        setApplicableFees((data || []).filter((f: any) => f.type === 'direct'));
+      }).catch(() => setApplicableFees([]));
+    }
+  }, [selectedProgramId]);
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
@@ -643,7 +639,7 @@ export default function RegistrationPage() {
                                     step="0.01"
                                     placeholder="3.5"
                                     {...field}
-                                    onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                    onChange={(e) => field.onChange(e.target.value)}
                                   />
                                 </FormControl>
                                 <FormMessage />
@@ -732,14 +728,63 @@ export default function RegistrationPage() {
                           {selectedProgram.description}
                         </p>
                         <div className="space-y-1 text-sm">
-                          <p><strong>Department:</strong> {selectedProgram.department}</p>
+                          <p><strong>Department:</strong> {typeof selectedProgram.department === 'object' && selectedProgram.department !== null ? (selectedProgram.department as any).name : selectedProgram.department}</p>
                           <p><strong>Duration:</strong> {selectedProgram.duration} years</p>
-                          <p><strong>Tuition Fee:</strong> {selectedProgram.currency} {selectedProgram.tuitionFee.toLocaleString()}</p>
+                          
+                          {applicableFees.length > 0 ? (
+                            <div className="mt-4">
+                              <p className="font-semibold text-primary mb-2">Fee Structure Breakdown:</p>
+                              
+                              <div className="space-y-4">
+                                {['semester_1', 'semester_2'].map(sem => {
+                                  // Filter fees that apply to this semester and have an amount > 0
+                                  const semFees = applicableFees.filter(f => 
+                                    (f.applicable_semester === 'both' || f.applicable_semester === sem) && 
+                                    parseFloat(sem === 'semester_1' ? f.semester_1_amount : f.semester_2_amount) > 0
+                                  );
+
+                                  if (semFees.length === 0) return null;
+
+                                  const semTotal = semFees.reduce((sum, f) => sum + parseFloat(sem === 'semester_1' ? f.semester_1_amount : f.semester_2_amount), 0);
+
+                                  return (
+                                    <div key={sem} className="bg-background rounded border border-border/50 overflow-hidden">
+                                      <div className="bg-muted px-3 py-2 border-b">
+                                        <h5 className="font-semibold">{sem === 'semester_1' ? 'Semester 1' : 'Semester 2'}</h5>
+                                      </div>
+                                      <div className="p-3 space-y-2">
+                                        {semFees.map((fee: any) => (
+                                          <div key={fee.id} className="flex justify-between items-start text-xs border-b last:border-0 pb-2 last:pb-0">
+                                            <div>
+                                              <span className="font-medium">{fee.name}</span>
+                                              <span className="ml-2 text-[10px] text-muted-foreground uppercase px-1.5 py-0.5 rounded bg-muted">
+                                                {fee.type}
+                                              </span>
+                                              {fee.description && <p className="text-muted-foreground mt-0.5">{fee.description}</p>}
+                                            </div>
+                                            <span className="font-medium whitespace-nowrap ml-4">
+                                              {fee.currency} {parseFloat(sem === 'semester_1' ? fee.semester_1_amount : fee.semester_2_amount).toLocaleString()}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <div className="flex justify-between pt-2 mt-2 border-t font-bold text-sm text-primary">
+                                          <span>Total for {sem === 'semester_1' ? 'Semester 1' : 'Semester 2'}</span>
+                                          <span>{semFees[0]?.currency || 'TZS'} {semTotal.toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-4 text-muted-foreground italic">No fee structure defined for this program yet.</p>
+                          )}
                         </div>
-                        <div className="mt-3">
+                        <div className="mt-4 pt-4 border-t">
                           <p className="text-sm font-medium mb-1">Requirements:</p>
                           <ul className="text-sm text-muted-foreground list-disc list-inside">
-                            {selectedProgram.requirements.map((req, i) => (
+                            {(selectedProgram.requirements || []).map((req: string, i: number) => (
                               <li key={i}>{req}</li>
                             ))}
                           </ul>
@@ -748,53 +793,6 @@ export default function RegistrationPage() {
                     </Card>
                   )}
 
-                  <FormField
-                    control={form.control}
-                    name="intake"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Intake</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select intake" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="January 2026">January 2026</SelectItem>
-                            <SelectItem value="May 2026">May 2026</SelectItem>
-                            <SelectItem value="September 2026">September 2026</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="studyMode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Study Mode</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select study mode" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {STUDY_MODES.map((mode) => (
-                              <SelectItem key={mode.value} value={mode.value}>
-                                {mode.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
               )}
 
@@ -888,7 +886,7 @@ export default function RegistrationPage() {
                       <p><strong>Program:</strong> {selectedProgram?.name}</p>
                       <p><strong>Intake:</strong> {form.watch('intake')}</p>
                       <p><strong>Study Mode:</strong> {form.watch('studyMode')}</p>
-                      <p><strong>Tuition Fee:</strong> {selectedProgram?.currency} {selectedProgram?.tuitionFee.toLocaleString()}</p>
+                      <p><strong>Tuition Fee:</strong> {selectedProgram?.currency} {((selectedProgram as any)?.tuitionFee || (selectedProgram as any)?.tuition_fee || 0).toLocaleString()}</p>
                     </div>
                   </div>
 
@@ -912,7 +910,7 @@ export default function RegistrationPage() {
                     <CardContent className="pt-6">
                       <h4 className="font-semibold mb-2">Registration Fee</h4>
                       <p className="text-2xl font-bold">
-                        {selectedProgram?.currency} {selectedProgram?.tuitionFee.toLocaleString()}
+                        {selectedProgram?.currency} {((selectedProgram as any)?.tuitionFee || (selectedProgram as any)?.tuition_fee || 0).toLocaleString()}
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
                         This fee is required to complete your registration

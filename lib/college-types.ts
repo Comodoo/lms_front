@@ -140,6 +140,7 @@ export interface Program {
   description: string;
   requirements: string[];
   tuitionFee: number;
+  fees?: { name: string; amount: string; description?: string }[];
   currency: string;
   isActive: boolean;
   createdAt: Date;
@@ -470,13 +471,11 @@ export interface RegistrationFormData {
 
   // Program Information
   programId: string;
-  intake: string;
-  studyMode: 'full_time' | 'part_time' | 'distance_learning';
 
   // Guardian Information
   guardianName: string;
   guardianPhone: string;
-  guardianEmail: string;
+  guardianEmail?: string;
   guardianRelationship: string;
   guardianAddress: string;
 

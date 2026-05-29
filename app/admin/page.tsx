@@ -18,23 +18,33 @@ import {
   UserPlus,
   PlusCircle,
 } from 'lucide-react';
-import { useResults } from '@/lib/results-context';
+import { apiClient } from '@/lib/api-client';
 
 export default function AdminDashboard() {
   const [mounted, setMounted] = useState(false);
-  const { studentProfiles, examResults } = useResults();
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalStaff: 0,
+    pendingRegistrations: 0,
+    totalRevenue: '0 TSH',
+    passedStudents: 0,
+    failedStudents: 0,
+  });
 
   useEffect(() => {
     setMounted(true);
+    fetchStats();
   }, []);
 
-  const stats = {
-    totalStudents: studentProfiles.length,
-    totalStaff: 12,
-    pendingRegistrations: 5,
-    totalRevenue: '1,635,000 TSH',
-    passedStudents: studentProfiles.filter(s => (s.cgpa || 0) >= 2.0).length,
-    failedStudents: studentProfiles.filter(s => (s.cgpa || 0) < 2.0).length,
+  const fetchStats = async () => {
+    try {
+      const data = await apiClient.getDashboardStats();
+      if (data) {
+        setStats(data as any);
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
   };
 
   if (!mounted) return null;
@@ -177,49 +187,6 @@ export default function AdminDashboard() {
             </Button>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Secondary Tables Snippet */}
-      <div className="grid gap-6 md:grid-cols-2">
-         <Card>
-            <CardHeader>
-              <CardTitle>Recent Staff Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-               <div className="space-y-4">
-                  {[
-                    { name: 'Dr. Peter John', action: 'Uploaded CP 412 Results', time: '2h ago' },
-                    { name: 'Sarah Wilson', action: 'Approved 3 Registrations', time: '5h ago' }
-                  ].map((act, i) => (
-                    <div key={i} className="flex justify-between items-center text-sm border-b pb-2 last:border-0">
-                       <div>
-                          <p className="font-medium">{act.name}</p>
-                          <p className="text-muted-foreground">{act.action}</p>
-                       </div>
-                       <span className="text-xs text-muted-foreground">{act.time}</span>
-                    </div>
-                  ))}
-               </div>
-            </CardContent>
-         </Card>
-
-         <Card>
-            <CardHeader>
-              <CardTitle>Payment Compliance</CardTitle>
-            </CardHeader>
-            <CardContent>
-               <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                     <span className="text-sm font-medium">Fully Paid Students</span>
-                     <Badge className="bg-green-100 text-green-700">85%</Badge>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                     <div className="bg-green-500 h-2 rounded-full w-[85%]"></div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">36 out of 42 students have completed their tuition payments for this semester.</p>
-               </div>
-            </CardContent>
-         </Card>
       </div>
     </div>
   );

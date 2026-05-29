@@ -432,7 +432,7 @@ export default function LandingPage() {
                     <div className="flex items-center gap-2">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                       <span className="text-sm font-medium">{course.rating}</span>
-                      <span className="text-sm text-muted-foreground">({course.students.toLocaleString()})</span>
+                      <span className="text-sm text-muted-foreground">({course.students.toLocaleString('en-US')})</span>
                     </div>
                     <p className="font-bold">${course.price}</p>
                   </div>
@@ -473,7 +473,7 @@ export default function LandingPage() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Amount</span>
-                    <span className="text-2xl font-bold">KES 4,999</span>
+                    <span className="text-2xl font-bold">TSH 4,999</span>
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-background rounded-lg border-2 border-green-500">
                     <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
@@ -699,3 +699,4 @@ export default function LandingPage() {
     </div>
   );
 }
+

@@ -111,7 +111,7 @@ const courses: Map<string, DBCourse> = new Map([
     language: 'en',
     subtitles: ['en', 'sw', 'fr'],
     price: 4999,
-    currency: 'KES',
+    currency: 'TSH',
     discountPrice: 2999,
     discountExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     level: 'beginner',
@@ -153,7 +153,7 @@ const courses: Map<string, DBCourse> = new Map([
     language: 'en',
     subtitles: ['en', 'fr'],
     price: 7999,
-    currency: 'KES',
+    currency: 'TSH',
     level: 'beginner',
     status: 'published',
     isPublic: true,
@@ -256,7 +256,7 @@ const enrollments: Map<string, DBEnrollment> = new Map([
     lastAccessedAt: new Date(),
     paymentId: 'payment-1',
     paidAmount: 2999,
-    currency: 'KES',
+    currency: 'TSH',
     paymentMethod: 'mpesa',
     enrolledAt: new Date('2024-01-20'),
   }],
@@ -270,7 +270,7 @@ const payments: Map<string, DBPayment> = new Map([
     type: 'course',
     referenceId: 'course-python-ds',
     amount: 2999,
-    currency: 'KES',
+    currency: 'TSH',
     platformFee: 450,
     instructorPayout: 2549,
     method: 'mpesa',
@@ -565,3 +565,4 @@ export const db = {
 };
 
 export default db;
+

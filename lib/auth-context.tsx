@@ -1,9 +1,10 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { authApi } from './api';
 import { generateId } from './sample-data';
 
-export type UserRole = 'student' | 'instructor' | 'admin';
+export type UserRole = 'student' | 'instructor' | 'admin' | 'accountant';
 
 export interface AuthUser {
   id: string;
@@ -67,9 +68,11 @@ export interface AuthContextType extends AuthState {
   isStudent: () => boolean;
   isInstructor: () => boolean;
   isAdmin: () => boolean;
+  isAccountant: () => boolean;
   canAccessStudentRoutes: () => boolean;
   canAccessInstructorRoutes: () => boolean;
   canAccessAdminRoutes: () => boolean;
+  canAccessAccountantRoutes: () => boolean;
 }
 
 export interface SignupData {
@@ -140,6 +143,20 @@ const DEMO_USERS: AuthUser[] = [
     twoFactorEnabled: false,
     preferences: defaultPreferences,
   },
+  {
+    id: 'user-accountant-1',
+    name: 'Mary Johnson',
+    email: 'accountant@example.com',
+    role: 'accountant',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mary',
+    createdAt: new Date('2023-02-01'),
+    password: 'password123',
+    isVerified: true,
+    loginAttempts: 0,
+    isLocked: false,
+    twoFactorEnabled: false,
+    preferences: defaultPreferences,
+  },
 ];
 
 // Admin registration code (for demo purposes)
@@ -182,127 +199,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('lms-users', JSON.stringify(users));
   }, [users]);
 
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; message: string; requiresTwoFactor?: boolean }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; message: string; requiresTwoFactor?: boolean; userRole?: string }> => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (!user) {
-      setState(prev => ({ ...prev, isLoading: false, error: 'Invalid email or password' }));
-      return { success: false, message: 'Invalid email or password' };
-    }
-
-    if (user.isLocked && user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
-      const remainingTime = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000);
-      setState(prev => ({ ...prev, isLoading: false, error: `Account locked. Try again in ${remainingTime} minutes.` }));
-      return { success: false, message: `Account locked. Try again in ${remainingTime} minutes.` };
-    }
-
-    if (user.password !== password) {
-      const newAttempts = user.loginAttempts + 1;
-      const shouldLock = newAttempts >= 5;
+    try {
+      const response = await authApi.login(email, password);
       
-      setUsers(prev => prev.map(u => 
-        u.id === user.id 
-          ? { 
-              ...u, 
-              loginAttempts: newAttempts,
-              isLocked: shouldLock,
-              lockedUntil: shouldLock ? new Date(Date.now() + 30 * 60 * 1000) : undefined
-            } 
-          : u
-      ));
-
-      const message = shouldLock 
-        ? 'Too many failed attempts. Account locked for 30 minutes.'
-        : `Invalid email or password. ${5 - newAttempts} attempts remaining.`;
-      
-      setState(prev => ({ ...prev, isLoading: false, error: message }));
-      return { success: false, message };
-    }
-
-    if (!user.isVerified) {
-      setState(prev => ({ ...prev, isLoading: false, error: 'Please verify your email address' }));
-      return { success: false, message: 'Please verify your email address. Check your inbox for verification link.' };
-    }
-
-    if (user.twoFactorEnabled) {
-      setPendingTwoFactorUser(user);
-      setState(prev => ({ ...prev, isLoading: false }));
-      return { success: true, message: 'Two-factor authentication required', requiresTwoFactor: true };
-    }
-
-    // Reset login attempts on successful login
-    const updatedUser = { ...user, loginAttempts: 0, isLocked: false, lockedUntil: undefined, lastLogin: new Date() };
-    setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-
-    setState({
-      user: updatedUser,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-    });
-
-    localStorage.setItem('lms-auth', JSON.stringify({ user: updatedUser }));
-    return { success: true, message: 'Login successful' };
-  }, [users]);
-
-  const signup = useCallback(async (data: SignupData): Promise<{ success: boolean; message: string }> => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    if (users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
-      setState(prev => ({ ...prev, isLoading: false, error: 'Email already registered' }));
-      return { success: false, message: 'An account with this email already exists' };
-    }
-
-    if (data.password.length < 8) {
-      setState(prev => ({ ...prev, isLoading: false, error: 'Password too short' }));
-      return { success: false, message: 'Password must be at least 8 characters' };
-    }
-
-    // Validate admin code for admin role
-    if (data.role === 'admin') {
-      if (data.adminCode !== ADMIN_REGISTRATION_CODE) {
-        setState(prev => ({ ...prev, isLoading: false, error: 'Invalid admin registration code' }));
-        return { success: false, message: 'Invalid admin registration code. Only authorized administrators can create admin accounts.' };
+      if (response.error) {
+        setState(prev => ({ ...prev, isLoading: false, error: response.error }));
+        return { success: false, message: response.error };
       }
+
+      if (response.data) {
+        const { token, user: backendUser } = response.data;
+        
+        // Store token in localStorage
+        localStorage.setItem('auth_token', token);
+        
+        // Convert backend user to frontend format
+        const authUser: AuthUser = {
+          id: backendUser.id.toString(),
+          name: `${backendUser.first_name} ${backendUser.last_name}`,
+          email: backendUser.email,
+          role: backendUser.role || 'student',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${backendUser.first_name}`,
+          createdAt: new Date(backendUser.created_at || Date.now()),
+          isVerified: true,
+          loginAttempts: 0,
+          isLocked: false,
+          twoFactorEnabled: false,
+          preferences: defaultPreferences,
+        };
+
+        setState({
+          user: authUser,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+
+        localStorage.setItem('lms-auth', JSON.stringify({ user: authUser }));
+        return { success: true, message: 'Login successful', userRole: authUser.role };
+      }
+      
+      setState(prev => ({ ...prev, isLoading: false, error: 'Invalid response from server' }));
+      return { success: false, message: 'Invalid response from server' };
+    } catch (error: any) {
+      setState(prev => ({ ...prev, isLoading: false, error: 'Login failed' }));
+      return { success: false, message: 'Login failed' };
     }
+  }, []);
 
-    const verificationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const signup = useCallback(async (data: any): Promise<{ success: boolean; message: string }> => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    const newUser: AuthUser = {
-      id: generateId(),
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`,
-      createdAt: new Date(),
-      password: data.password,
-      isVerified: false, // In production, would be false until email verified
-      verificationCode,
-      loginAttempts: 0,
-      isLocked: false,
-      twoFactorEnabled: false,
-      preferences: defaultPreferences,
-    };
+    try {
+      const response = await authApi.register(data);
+      
+      if (response.error) {
+        setState(prev => ({ ...prev, isLoading: false, error: response.error }));
+        return { success: false, message: response.error };
+      }
 
-    setUsers(prev => [...prev, newUser]);
+      // Do NOT log the user in automatically. Clear any tokens just in case
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('lms-auth');
 
-    // Auto-verify for demo purposes (in production, send verification email)
-    setTimeout(() => {
-      setUsers(prev => prev.map(u => u.id === newUser.id ? { ...u, isVerified: true } : u));
-    }, 100);
+      setState(prev => ({ ...prev, isLoading: false }));
+      return { success: true, message: 'Account created successfully! Please log in.' };
+    } catch (error: any) {
+      const errorMessage = error.message || 'Registration failed';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      return { success: false, message: errorMessage };
+    }
+  }, []);
 
-    setState(prev => ({ ...prev, isLoading: false }));
-    return { success: true, message: `Account created successfully! Verification code: ${verificationCode} (auto-verified for demo)` };
-  }, [users]);
-
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Call backend logout API
+    await authApi.logout();
+    
+    // Clear local state
     setState({
       user: null,
       isAuthenticated: false,
@@ -310,6 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       error: null,
     });
     localStorage.removeItem('lms-auth');
+    localStorage.removeItem('auth_token');
     setPendingTwoFactorUser(null);
   }, []);
 
@@ -532,6 +509,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return state.user?.role === 'admin';
   }, [state.user]);
 
+  const isAccountant = useCallback((): boolean => {
+    return state.user?.role === 'accountant';
+  }, [state.user]);
+
   const canAccessStudentRoutes = useCallback((): boolean => {
     return state.user?.role === 'student';
   }, [state.user]);
@@ -542,6 +523,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const canAccessAdminRoutes = useCallback((): boolean => {
     return state.user?.role === 'admin';
+  }, [state.user]);
+
+  const canAccessAccountantRoutes = useCallback((): boolean => {
+    return state.user?.role === 'accountant' || state.user?.role === 'admin';
   }, [state.user]);
 
   return (
@@ -567,9 +552,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isStudent,
         isInstructor,
         isAdmin,
+        isAccountant,
         canAccessStudentRoutes,
         canAccessInstructorRoutes,
         canAccessAdminRoutes,
+        canAccessAccountantRoutes,
       }}
     >
       {children}

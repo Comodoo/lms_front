@@ -1,24 +1,74 @@
 'use client';
 
-import Link from 'next/link';
-import { useLMS } from '@/lib/lms-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { coursesApi } from '@/lib/api';
+import { useLMS } from '@/lib/lms-context';
 import { useResults } from '@/lib/results-context';
 import {
-  Users,
-  TrendingUp,
-  PlusCircle,
-  Star,
-  FileText,
+    BookOpen,
+    FileText,
+    PlusCircle,
+    Star,
+    TrendingUp,
+    Users
 } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+interface Course {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  department?: {
+    name: string;
+  };
+  credit?: {
+    name: string;
+    value: number;
+  };
+  instructor_assignments?: Array<{
+    academic_year: string;
+    semester: string;
+  }>;
+}
 
 export default function InstructorDashboard() {
   const { currentUser } = useLMS();
   const { examResults } = useResults();
-  const studentsCount = 42; // Mock total students
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const studentsCount = courses.length > 0 ? courses.length * 14 : 0; // Estimate based on assigned courses
   const pendingResults = examResults.filter(r => r.status === 'submitted').length;
   const approvedResults = examResults.filter(r => r.status === 'approved').length;
+
+  useEffect(() => {
+    loadMyCourses();
+  }, []);
+
+  const loadMyCourses = async () => {
+    setLoading(true);
+    try {
+      console.log('Loading instructor courses...');
+      const response = await coursesApi.getMyCourses();
+      console.log('API response:', response);
+      if (response.error) {
+        console.error('API error:', response.error);
+        setError(response.error);
+      } else {
+        console.log('Courses data:', response.data);
+        setCourses(response.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load courses:', err);
+      setError('Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = [
     {
@@ -55,6 +105,14 @@ export default function InstructorDashboard() {
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -66,6 +124,12 @@ export default function InstructorDashboard() {
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -86,6 +150,54 @@ export default function InstructorDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* My Courses Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            My Assigned Courses
+          </CardTitle>
+          <CardDescription>
+            Courses you are currently teaching ({courses.length} total)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {courses.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {courses.map((course) => (
+                <div key={course.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-semibold text-sm">{course.code}</h3>
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                      {course.credit?.value || 0} Credits
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium mb-1">{course.name}</p>
+                  <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                    {course.description || 'No description'}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {course.department?.name || 'N/A'}
+                    </span>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/instructor/results?course_id=${course.id}`}>
+                        Manage
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No courses assigned to you yet</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Main Actions */}
       <div className="grid gap-6 md:grid-cols-2">

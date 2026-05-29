@@ -24,10 +24,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useResults } from '@/lib/results-context';
 import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function AdminStudentsPage() {
   const router = useRouter();
-  const { getStudentProfiles, loading } = useResults();
+  const { user } = useAuth();
+  const { getStudentProfiles, deleteStudentProfile, loading } = useResults();
   const [mounted, setMounted] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,6 +42,13 @@ export default function AdminStudentsPage() {
   const loadData = async () => {
     const data = await getStudentProfiles();
     setStudents(data);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this student?")) {
+      await deleteStudentProfile(id);
+      await loadData();
+    }
   };
 
   const filteredStudents = students.filter(s => 
@@ -88,6 +97,7 @@ export default function AdminStudentsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Reg. Number</TableHead>
+                <TableHead>Student Name</TableHead>
                 <TableHead>Program</TableHead>
                 <TableHead>Year</TableHead>
                 <TableHead>Intake</TableHead>
@@ -107,6 +117,7 @@ export default function AdminStudentsPage() {
                 filteredStudents.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-medium">{student.registrationNumber}</TableCell>
+                    <TableCell>{student.firstName} {student.lastName}</TableCell>
                     <TableCell>{student.programName}</TableCell>
                     <TableCell>Year {student.currentYear}</TableCell>
                     <TableCell>{student.intake}</TableCell>
@@ -143,10 +154,12 @@ export default function AdminStudentsPage() {
                             Edit Student
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
+                          {user?.role === 'admin' && (
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(student.id)}>
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

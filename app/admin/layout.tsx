@@ -1,41 +1,43 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useAuth } from '@/lib/auth-context';
+import { cn } from '@/lib/utils';
+import {
+    BookOpen,
+    ChevronRight,
+    ClipboardList,
+    DollarSign,
+    FileText,
+    GraduationCap,
+    LayoutDashboard,
+    LogOut,
+    Menu,
+    Settings,
+    User,
+    UserCog,
+    Users
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  LayoutDashboard,
-  ClipboardList,
-  FileText,
-  Settings,
-  Menu,
-  LogOut,
-  User,
-  GraduationCap,
-  Users,
-  UserCog,
-  DollarSign,
-  ChevronRight,
-} from 'lucide-react';
-import { ThemeToggle } from '@/components/shared/theme-toggle';
-import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Students', href: '/admin/users/students', icon: Users },
   { name: 'Staff', href: '/admin/users/staff', icon: UserCog },
+  { name: 'Programs', href: '/admin/programs', icon: GraduationCap },
+  { name: 'Courses', href: '/admin/courses', icon: BookOpen },
   { name: 'Registrations', href: '/admin/registrations', icon: ClipboardList },
   { name: 'Results', href: '/admin/results', icon: FileText },
   { name: 'Payments', href: '/admin/payments', icon: DollarSign },
@@ -66,15 +68,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!mounted) return null;
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-card border-r">
+    <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
       <div className="p-6">
         <Link href="/admin" className="flex items-center gap-3">
-          <div className="bg-primary rounded-lg p-1.5">
-            <GraduationCap className="h-6 w-6 text-primary-foreground" />
+          <div className="bg-white/20 rounded-lg p-1.5">
+            <GraduationCap className="h-6 w-6 text-white" />
           </div>
           <div>
-            <span className="text-lg font-bold block leading-none">College LMS</span>
-            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Admin Portal</span>
+            <span className="text-lg font-bold block leading-none text-white">College LMS</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Admin Portal</span>
           </div>
         </Link>
       </div>
@@ -90,12 +92,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className={cn(
                 'group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
                 active
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-white text-[#0D7377] shadow-md shadow-black/10'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
               )}
             >
               <div className="flex items-center gap-3">
-                <item.icon className={cn('h-5 w-5', active ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground')} />
+                <item.icon className={cn('h-5 w-5', active ? 'text-[#0D7377]' : 'text-white/70 group-hover:text-white')} />
                 {item.name}
               </div>
               {active && <ChevronRight className="h-4 w-4 opacity-70" />}
@@ -104,16 +106,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         })}
       </nav>
 
-      <div className="p-4 mt-auto border-t">
-        <div className="bg-muted/50 rounded-2xl p-4 flex items-center gap-3">
-           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+      <div className="p-4 mt-auto border-t border-white/20">
+        <div className="bg-white/10 rounded-2xl p-4 flex items-center gap-3">
+           <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-white">
               {user?.name?.charAt(0) || 'A'}
            </div>
            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{user?.name || 'Administrator'}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'admin@college.ac.tz'}</p>
+              <p className="text-sm font-semibold truncate text-white">{user?.name || 'Administrator'}</p>
+              <p className="text-[10px] text-white/70 truncate">{user?.email || 'admin@college.ac.tz'}</p>
            </div>
-           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground hover:text-destructive">
+           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/20">
               <LogOut className="h-4 w-4" />
            </Button>
         </div>

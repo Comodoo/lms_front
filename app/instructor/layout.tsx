@@ -1,46 +1,44 @@
 'use client';
 
 import { ThemeToggle } from '@/components/shared/theme-toggle';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
-    FileText,
-    GraduationCap,
-    LayoutDashboard,
-    LogOut,
-    Menu,
-    Settings,
-    User,
+  ChevronRight,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Settings,
+  User,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-export default function InstructorLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+const navigation = [
+  { name: 'Dashboard', href: '/instructor', icon: LayoutDashboard },
+  { name: 'My Courses', href: '/instructor/courses', icon: GraduationCap },
+  { name: 'Results', href: '/instructor/results', icon: FileText },
+  { name: 'Settings', href: '/instructor/settings', icon: Settings },
+];
+
+export default function InstructorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -52,144 +50,146 @@ export default function InstructorLayout({
     router.push('/login');
   };
 
-  // Navigation items for instructor
-  const primaryNav = [
-    { name: 'Dashboard', href: '/instructor', icon: LayoutDashboard },
-    { name: 'Results', href: '/instructor/results', icon: FileText },
-  ];
-
   const isActivePath = (href: string) => {
+    if (href === '/instructor') return pathname === '/instructor';
     return pathname === href || pathname.startsWith(href + '/');
   };
 
   if (!mounted) return null;
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between gap-4">
-            {/* Logo */}
-            <Link href="/instructor" className="flex items-center gap-2 shrink-0">
-              <GraduationCap className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold hidden sm:block">College LMS</span>
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
+      <div className="p-6">
+        <Link href="/instructor" className="flex items-center gap-3">
+          <div className="bg-white/20 rounded-lg p-1.5">
+            <GraduationCap className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <span className="text-lg font-bold block leading-none text-white">College LMS</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Instructor Portal</span>
+          </div>
+        </Link>
+      </div>
+
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2">
+        {navigation.map((item) => {
+          const active = isActivePath(item.href);
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={() => setSidebarOpen(false)}
+              className={cn(
+                'group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                active
+                  ? 'bg-white text-[#0D7377] shadow-md shadow-black/10'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <item.icon className={cn('h-5 w-5', active ? 'text-[#0D7377]' : 'text-white/70 group-hover:text-white')} />
+                {item.name}
+              </div>
+              {active && <ChevronRight className="h-4 w-4 opacity-70" />}
             </Link>
+          );
+        })}
+      </nav>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
-              {primaryNav.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    'px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
-                    isActivePath(item.href)
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
+      <div className="p-4 mt-auto border-t border-white/20">
+        <div className="bg-white/10 rounded-2xl p-4 flex items-center gap-3">
+           <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-white">
+              {user?.name?.charAt(0) || 'I'}
+           </div>
+           <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate text-white">{user?.name || 'Instructor'}</p>
+              <p className="text-[10px] text-white/70 truncate">{user?.email || 'instructor@college.ac.tz'}</p>
+           </div>
+           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/20">
+              <LogOut className="h-4 w-4" />
+           </Button>
+        </div>
+      </div>
+    </div>
+  );
 
-            {/* Right Side Actions */}
+  return (
+    <div className="min-h-screen bg-slate-50/50 flex">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:block w-72 h-screen sticky top-0 shrink-0 shadow-sm z-40">
+        <SidebarContent />
+      </aside>
+
+      {/* Main Column */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Header */}
+        <header className="h-16 sticky top-0 z-30 flex items-center justify-between px-4 lg:px-8 bg-card/80 backdrop-blur-md border-b">
+          <div className="flex items-center gap-4">
+            {/* Mobile Sidebar Trigger */}
+            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <SheetTrigger asChild className="lg:hidden">
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 border-none w-72">
+                <SidebarContent />
+              </SheetContent>
+            </Sheet>
+            
             <div className="flex items-center gap-2">
-              <ThemeToggle />
-              
-              {/* User Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full h-9 w-9">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">
-                        {user?.name?.charAt(0) || 'U'}
-                      </span>
-                    </div>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-1.5">
-                    <p className="text-sm font-medium">{user?.name}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
-                    <Badge variant="outline" className="mt-1 capitalize">{user?.role}</Badge>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/instructor/profile">
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/instructor/settings">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Mobile Menu */}
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild className="md:hidden">
-                  <Button variant="ghost" size="icon">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right">
-                  <SheetHeader>
-                    <SheetTitle>Menu</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6 space-y-2">
-                    {primaryNav.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={cn(
-                          'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
-                          isActivePath(item.href)
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-muted'
-                        )}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        {item.name}
-                      </Link>
-                    ))}
-                  </div>
-                </SheetContent>
-              </Sheet>
+               <span className="text-sm font-medium text-muted-foreground hidden lg:block">Instructor</span>
+               <ChevronRight className="h-4 w-4 text-muted-foreground/30 hidden lg:block" />
+               <h2 className="text-sm font-semibold capitalize">
+                {pathname.split('/').pop()?.replace(/-/g, ' ') || 'Dashboard'}
+               </h2>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1">{children}</main>
-
-      {/* Footer */}
-      <footer className="border-t bg-card mt-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-6 w-6 text-primary" />
-              <span className="font-semibold">College LMS</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              College Student Management System - Instructor Portal
-            </p>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full ring-2 ring-primary/5">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                    {user?.name?.charAt(0) || 'I'}
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 mt-2">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/instructor/profile">
+                    <User className="mr-2 h-4 w-4" /> Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/instructor/settings">
+                    <Settings className="mr-2 h-4 w-4" /> Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </div>
-      </footer>
+        </header>
+
+        {/* Dynamic Content */}
+        <main className="flex-1 p-4 lg:p-8">
+          {children}
+        </main>
+
+        <footer className="p-6 border-t bg-card/50 text-center">
+          <p className="text-xs text-muted-foreground italic">
+            &copy; 2026 College Student Management System (Instructor Portal)
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }

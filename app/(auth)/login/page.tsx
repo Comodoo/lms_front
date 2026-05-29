@@ -1,18 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
+import { useAuth } from '@/lib/auth-context';
+import { AlertCircle, ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, Smartphone } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
-import { Eye, EyeOff, GraduationCap, Mail, Lock, AlertCircle, ArrowRight, Smartphone } from 'lucide-react';
+import { useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,14 +44,18 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const getRedirectPath = (userEmail: string) => {
+  const getRedirectPath = (userRole: string) => {
     // Admin users go to admin dashboard
-    if (userEmail === 'admin@example.com') {
+    if (userRole === 'admin') {
       return '/admin';
     }
     // Instructors go to instructor dashboard
-    if (userEmail === 'instructor@example.com') {
+    if (userRole === 'instructor') {
       return '/instructor';
+    }
+    // Accountants go to accountant dashboard
+    if (userRole === 'accountant') {
+      return '/accountant/dashboard';
     }
     // Default: students go to student dashboard
     return '/dashboard';
@@ -71,8 +75,8 @@ export default function LoginPage() {
     }
     
     if (result.success) {
-      // Redirect based on user role/email
-      const redirectPath = getRedirectPath(email);
+      // Redirect based on user role returned from login
+      const redirectPath = getRedirectPath(result.userRole || 'student');
       router.push(redirectPath);
     } else {
       setMessage(result.message);
@@ -333,6 +337,20 @@ export default function LoginPage() {
                     <div className="flex flex-col items-start">
                       <span className="font-medium">Admin Account</span>
                       <span className="text-xs text-muted-foreground">admin@example.com</span>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto py-2"
+                    onClick={() => {
+                      setEmail('accountant@example.com');
+                      setPassword('password123');
+                    }}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Accountant Account</span>
+                      <span className="text-xs text-muted-foreground">accountant@example.com</span>
                     </div>
                   </Button>
                 </div>

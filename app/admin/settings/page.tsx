@@ -258,7 +258,7 @@ export default function AdminSettingsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="USD">USD - US Dollar</SelectItem>
-                      <SelectItem value="KES">KES - Kenyan Shilling</SelectItem>
+                      <SelectItem value="TSH">TSH - Kenyan Shilling</SelectItem>
                       <SelectItem value="NGN">NGN - Nigerian Naira</SelectItem>
                       <SelectItem value="ZAR">ZAR - South African Rand</SelectItem>
                       <SelectItem value="GHS">GHS - Ghanaian Cedi</SelectItem>
@@ -870,3 +870,4 @@ export default function AdminSettingsPage() {
     </div>
   );
 }
+

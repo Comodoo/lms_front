@@ -11,7 +11,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'instructor' | 'student';
+  role: 'instructor' | 'student' | 'admin' | 'accountant';
   avatar?: string;
   createdAt: Date;
 }
@@ -72,25 +72,25 @@ export interface LessonContent {
   // Video content
   videoUrl?: string;
   videoProvider?: 'youtube' | 'vimeo' | 'custom';
-  
+
   // Document content
   documentContent?: string;
   documentUrl?: string;
-  
+
   // Audio content
   audioUrl?: string;
   audioTitle?: string;
   audioTranscript?: string;
-  
+
   // Slideshow content
   slides?: Slide[];
   autoPlay?: boolean;
   slideDuration?: number; // seconds per slide
-  
+
   // Quiz/Exam content
   quizQuestions?: QuizQuestion[];
   assessmentConfig?: AssessmentConfig;
-  
+
   // Assignment content
   assignmentDescription?: string;
   assignmentDueDate?: Date;
@@ -357,7 +357,7 @@ export interface StudentProfile {
   linkedin?: string;
   github?: string;
   portfolio?: string;
-  
+
   // Career Information
   careerGoals: string[];
   currentRole?: string;
@@ -371,31 +371,31 @@ export interface StudentProfile {
   };
   remotePreference: 'remote' | 'hybrid' | 'onsite' | 'any';
   willingToRelocate: boolean;
-  
+
   // Skills and Interests
   skills: Skill[];
   interests: string[];
   preferredCategories: string[];
   learningGoals: string[];
-  
+
   // Education and Certifications
   education: Education[];
   certifications: Certification[];
-  
+
   // Work Experience
   workExperience: WorkExperience[];
-  
+
   // Projects
   projects: Project[];
-  
+
   // Resume Data
   resumeUrl?: string;
   resumeLastUpdated?: Date;
-  
+
   // Onboarding
   onboardingCompleted: boolean;
   onboardingStep: number;
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -560,7 +560,7 @@ export interface EnterpriseOrganization {
   description?: string;
   industry?: string;
   employeeCount?: string;
-  
+
   // KYB Information
   registrationNumber: string;
   taxId: string;
@@ -569,21 +569,21 @@ export interface EnterpriseOrganization {
   kybSubmittedAt?: Date;
   kybVerifiedAt?: Date;
   kybNotes?: string;
-  
+
   // Contact Information
   primaryContact: EnterpriseContact;
   billingContact?: EnterpriseContact;
   technicalContact?: EnterpriseContact;
-  
+
   // Role and Permissions
   role: EnterpriseRole;
-  
+
   // Subscription and Billing
   subscription?: EnterpriseSubscription;
-  
+
   // Settings
   settings: EnterpriseSettings;
-  
+
   status: EnterpriseStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -642,18 +642,18 @@ export interface EnterpriseEnrollmentForm {
   industry: string;
   employeeCount: string;
   description: string;
-  
+
   // Step 2: KYB Verification
   registrationNumber: string;
   taxId: string;
   documents: File[];
-  
+
   // Step 3: Contact Information
   primaryContact: EnterpriseContact;
-  
+
   // Step 4: Role Selection
   role: EnterpriseRole;
-  
+
   // Step 5: Plan Selection
   plan: 'starter' | 'professional' | 'enterprise';
   seats: number;
@@ -812,21 +812,21 @@ export const ROLE_PRESETS: Record<InstitutionUserRole, {
 
 export const ALL_PERMISSIONS: UserPermission[] = [
   // Courses
-  { key: 'courses.create',  label: 'Create Courses',   description: 'Create new courses',          category: 'courses'   },
-  { key: 'courses.edit',    label: 'Edit Courses',     description: 'Edit course content',         category: 'courses'   },
-  { key: 'courses.delete',  label: 'Delete Courses',   description: 'Delete courses permanently',  category: 'courses'   },
-  { key: 'courses.publish', label: 'Publish Courses',  description: 'Publish / unpublish courses', category: 'courses'   },
+  { key: 'courses.create', label: 'Create Courses', description: 'Create new courses', category: 'courses' },
+  { key: 'courses.edit', label: 'Edit Courses', description: 'Edit course content', category: 'courses' },
+  { key: 'courses.delete', label: 'Delete Courses', description: 'Delete courses permanently', category: 'courses' },
+  { key: 'courses.publish', label: 'Publish Courses', description: 'Publish / unpublish courses', category: 'courses' },
   // Students
-  { key: 'students.view',    label: 'View Students',    description: 'View student lists',          category: 'students'  },
-  { key: 'students.manage',  label: 'Manage Students',  description: 'Enroll / remove students',    category: 'students'  },
-  { key: 'students.message', label: 'Message Students', description: 'Send messages to students',   category: 'students'  },
+  { key: 'students.view', label: 'View Students', description: 'View student lists', category: 'students' },
+  { key: 'students.manage', label: 'Manage Students', description: 'Enroll / remove students', category: 'students' },
+  { key: 'students.message', label: 'Message Students', description: 'Send messages to students', category: 'students' },
   // Analytics
-  { key: 'analytics.view',   label: 'View Analytics',  description: 'View reports & dashboards',   category: 'analytics' },
-  { key: 'analytics.export', label: 'Export Data',     description: 'Export analytics data',       category: 'analytics' },
+  { key: 'analytics.view', label: 'View Analytics', description: 'View reports & dashboards', category: 'analytics' },
+  { key: 'analytics.export', label: 'Export Data', description: 'Export analytics data', category: 'analytics' },
   // Settings
-  { key: 'settings.edit',    label: 'Edit Settings',   description: 'Change institution settings', category: 'settings'  },
+  { key: 'settings.edit', label: 'Edit Settings', description: 'Change institution settings', category: 'settings' },
   // Team
-  { key: 'team.manage',      label: 'Manage Team',     description: 'Invite, edit & remove users', category: 'team'      },
+  { key: 'team.manage', label: 'Manage Team', description: 'Invite, edit & remove users', category: 'team' },
 ];
 
 // ─── End Institution Types ────────────────────────────────────────────────────
@@ -839,7 +839,7 @@ export type InstructorTier = 'starter' | 'professional' | 'expert' | 'enterprise
 export interface InstructorProfile {
   id: string;
   userId: string;
-  
+
   // Personal Information
   firstName: string;
   lastName: string;
@@ -848,7 +848,7 @@ export interface InstructorProfile {
   phone?: string;
   avatar?: string;
   coverImage?: string;
-  
+
   // Professional Profile
   headline: string;
   bio: string;
@@ -858,7 +858,7 @@ export interface InstructorProfile {
   linkedin?: string;
   twitter?: string;
   youtube?: string;
-  
+
   // Business Information (KYB)
   businessType: 'individual' | 'company';
   businessName?: string;
@@ -870,7 +870,7 @@ export interface InstructorProfile {
   city: string;
   state: string;
   postalCode: string;
-  
+
   // KYB Documents
   kybDocuments: InstructorDocument[];
   kybStatus: InstructorKYBStatus;
@@ -878,13 +878,13 @@ export interface InstructorProfile {
   kybVerifiedAt?: Date;
   kybExpiresAt?: Date;
   kybRejectionReason?: string;
-  
+
   // Payment Information
   payoutMethod: PayoutMethod;
   payoutDetails: PayoutDetails;
   taxFormSubmitted: boolean;
   taxFormType?: 'W9' | 'W8BEN' | 'W8BENE';
-  
+
   // Instructor Stats
   tier: InstructorTier;
   totalStudents: number;
@@ -892,18 +892,18 @@ export interface InstructorProfile {
   totalRevenue: number;
   averageRating: number;
   totalReviews: number;
-  
+
   // Revenue Share
   revenueShare: number; // percentage (e.g., 70 for 70%)
-  
+
   // Settings
   settings: InstructorSettings;
-  
+
   // Verification
   emailVerified: boolean;
   phoneVerified: boolean;
   identityVerified: boolean;
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -928,13 +928,13 @@ export interface PayoutDetails {
   bankRoutingNumber?: string;
   bankSwiftCode?: string;
   bankIban?: string;
-  
+
   // PayPal
   paypalEmail?: string;
-  
+
   // Stripe
   stripeAccountId?: string;
-  
+
   // Wise
   wiseEmail?: string;
   wiseCurrency?: string;
@@ -948,18 +948,18 @@ export interface InstructorSettings {
   studentMessages: boolean;
   reviewAlerts: boolean;
   salesReports: 'daily' | 'weekly' | 'monthly' | 'never';
-  
+
   // Privacy
   showRealName: boolean;
   showEmail: boolean;
   showSocialLinks: boolean;
   allowDirectMessages: boolean;
-  
+
   // Course Defaults
   defaultLanguage: string;
   defaultCurrency: string;
   autoPublish: boolean;
-  
+
   // Advanced
   apiAccess: boolean;
   webhookUrl?: string;
@@ -971,35 +971,35 @@ export interface InstructorAnalytics {
   totalRevenue: number;
   revenueThisMonth: number;
   revenueTrend: number; // percentage change
-  
+
   totalStudents: number;
   newStudentsThisMonth: number;
   studentsTrend: number;
-  
+
   totalEnrollments: number;
   enrollmentsThisMonth: number;
   enrollmentsTrend: number;
-  
+
   averageRating: number;
   ratingTrend: number;
-  
+
   // Course Performance
   coursePerformance: CourseAnalytics[];
-  
+
   // Revenue Breakdown
   revenueByMonth: { month: string; revenue: number; enrollments: number }[];
   revenueByCountry: { country: string; revenue: number; percentage: number }[];
   revenueBySource: { source: string; revenue: number; percentage: number }[];
-  
+
   // Student Demographics
   studentsByCountry: { country: string; count: number; percentage: number }[];
   studentsByDevice: { device: string; count: number; percentage: number }[];
-  
+
   // Engagement
   averageCompletionRate: number;
   averageWatchTime: number; // minutes
   topPerformingLessons: { lessonId: string; title: string; completionRate: number }[];
-  
+
   // Traffic Sources
   trafficSources: { source: string; visits: number; conversions: number; revenue: number }[];
 }
@@ -1035,15 +1035,15 @@ export interface FileMetadata {
   duration?: number;
   resolution?: string;
   codec?: string;
-  
+
   // Audio
   bitrate?: number;
   channels?: number;
-  
+
   // Image
   width?: number;
   height?: number;
-  
+
   // Document
   pages?: number;
 }
@@ -1415,17 +1415,17 @@ export interface EmployerDashboard {
   industry: string;
   size: string;
   website?: string;
-  
+
   // Metrics
   totalJobPostings: number;
   activeJobPostings: number;
   totalApplicants: number;
   totalHires: number;
-  
+
   // Course partnerships
   partnerCourseIds: string[];
   talentPoolAccess: boolean;
-  
+
   // Settings
   verificationStatus: 'pending' | 'verified' | 'rejected';
   createdAt: Date;
@@ -1473,28 +1473,28 @@ export interface Cohort {
   description: string;
   instructorId: string;
   instructorName: string;
-  
+
   // Schedule
   startDate: Date;
   endDate: Date;
   enrollmentDeadline: Date;
   schedule: CohortSchedule[];
-  
+
   // Pricing
   price: number;
   currency: string;
   maxStudents: number;
   currentStudents: number;
-  
+
   // Features
   hasLiveSessions: boolean;
   hasGroupAssignments: boolean;
   hasPeerReview: boolean;
   hasMentor: boolean;
-  
+
   // Status
   status: 'upcoming' | 'enrolling' | 'in_progress' | 'completed';
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1760,21 +1760,21 @@ export interface CodeLab {
   description: string;
   language: 'javascript' | 'typescript' | 'python' | 'html' | 'css' | 'sql' | 'java' | 'go' | 'rust';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
-  
+
   // Code content
   starterCode: string;
   solutionCode: string;
   testCases: CodeTestCase[];
-  
+
   // Instructions
   instructions: string;
   hints: string[];
-  
+
   // Completion
   passingScore: number;
   maxAttempts: number;
   timeLimit?: number;
-  
+
   createdAt: Date;
 }
 
@@ -1807,15 +1807,15 @@ export interface BusinessSimulation {
   description: string;
   scenario: string;
   category: 'marketing' | 'finance' | 'operations' | 'strategy' | 'hr';
-  
+
   // Simulation data
   initialState: Record<string, unknown>;
   decisions: SimulationDecision[];
   outcomes: SimulationOutcome[];
-  
+
   // Scoring
   metrics: { name: string; weight: number; target: number }[];
-  
+
   duration: number; // in simulated time periods
   createdAt: Date;
 }
@@ -1857,16 +1857,16 @@ export interface CaseStudy {
   description: string;
   company: string;
   industry: string;
-  
+
   // Content
   background: string;
   challenge: string;
   data: CaseStudyData[];
   questions: CaseStudyQuestion[];
-  
+
   // Resources
   attachments: { name: string; url: string; type: string }[];
-  
+
   createdAt: Date;
 }
 
@@ -1906,7 +1906,7 @@ export interface VerifiableCertificate {
   courseTitle: string;
   instructorId: string;
   instructorName: string;
-  
+
   // Certificate details
   type: 'completion' | 'skill_mastery' | 'professional' | 'achievement';
   title: string;
@@ -1914,21 +1914,21 @@ export interface VerifiableCertificate {
   skillsValidated: string[];
   score?: number;
   grade?: 'pass' | 'merit' | 'distinction' | 'honors';
-  
+
   // Verification
   verificationCode: string;
   qrCodeUrl: string;
   publicUrl: string;
   blockchainHash?: string;
   blockchainNetwork?: string;
-  
+
   // Metadata
   issueDate: Date;
   expiryDate?: Date;
   isRevoked: boolean;
   revokedAt?: Date;
   revokedReason?: string;
-  
+
   // Sharing
   isPublic: boolean;
   linkedInUrl?: string;
@@ -1965,7 +1965,7 @@ export interface MobilePayment {
   provider: MobileMoneyProvider;
   phoneNumber: string;
   amount: number;
-  currency: 'KES' | 'TZS' | 'UGX' | 'GHS' | 'NGN' | 'ZAR' | 'XOF' | 'XAF';
+  currency: 'TSH' | 'TZS' | 'UGX' | 'GHS' | 'NGN' | 'ZAR' | 'XOF' | 'XAF';
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   transactionId?: string;
   reference: string;
@@ -2049,22 +2049,22 @@ export interface DropOffAnalysis {
 export interface RevenueInsights {
   instructorId: string;
   period: 'day' | 'week' | 'month' | 'year';
-  
+
   // Revenue metrics
   totalRevenue: number;
   netRevenue: number;
   refunds: number;
   platformFee: number;
-  
+
   // Breakdown
   byCourse: { courseId: string; courseName: string; revenue: number; enrollments: number }[];
   byCountry: { country: string; revenue: number; percentage: number }[];
   byPaymentMethod: { method: string; revenue: number; percentage: number }[];
-  
+
   // Trends
   dailyRevenue: { date: string; revenue: number; enrollments: number }[];
   projectedMonthlyRevenue: number;
-  
+
   // Comparisons
   vsLastPeriod: number; // percentage change
   vsSamePeriodLastYear?: number;
@@ -2073,23 +2073,23 @@ export interface RevenueInsights {
 export interface StudentEngagementMetrics {
   userId: string;
   courseId: string;
-  
+
   // Time metrics
   totalTimeSpent: number;
   avgSessionDuration: number;
   sessionsCount: number;
-  
+
   // Activity metrics
   lessonsViewed: number;
   lessonReplayRate: number;
   quizAttempts: number;
   assignmentsSubmitted: number;
-  
+
   // Engagement patterns
   mostActiveHours: number[];
   mostActiveDays: string[];
   lastActivity: Date;
-  
+
   // Risk indicators
   riskLevel: 'low' | 'medium' | 'high';
   daysSinceLastActivity: number;
@@ -2105,26 +2105,26 @@ export interface Subscription {
   userId: string;
   tier: SubscriptionTier;
   status: 'active' | 'cancelled' | 'past_due' | 'expired';
-  
+
   // Billing
   pricePerMonth: number;
   pricePerYear: number;
   billingCycle: 'monthly' | 'yearly';
   currency: string;
-  
+
   // Period
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   cancelAtPeriodEnd: boolean;
-  
+
   // Features
   features: SubscriptionFeature[];
-  
+
   // Payment
   paymentMethodId?: string;
   lastPaymentDate?: Date;
   nextPaymentDate?: Date;
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -2209,17 +2209,17 @@ export interface CorporatePackage {
   id: string;
   organizationId: string;
   organizationName: string;
-  
+
   // Package details
   type: 'team' | 'department' | 'enterprise';
   seats: number;
   usedSeats: number;
-  
+
   // Pricing
   pricePerSeat: number;
   totalPrice: number;
   billingCycle: 'monthly' | 'quarterly' | 'yearly';
-  
+
   // Features
   customBranding: boolean;
   ssoEnabled: boolean;
@@ -2227,12 +2227,12 @@ export interface CorporatePackage {
   customCourses: boolean;
   analyticsAccess: boolean;
   apiAccess: boolean;
-  
+
   // Contract
   contractStartDate: Date;
   contractEndDate: Date;
   autoRenew: boolean;
-  
+
   status: 'active' | 'expired' | 'cancelled';
   createdAt: Date;
 }
@@ -2252,7 +2252,7 @@ export interface Notification {
   expiresAt?: Date;
 }
 
-export type NotificationType = 
+export type NotificationType =
   | 'course_update'
   | 'new_lesson'
   | 'quiz_reminder'
@@ -2378,7 +2378,7 @@ export interface ChatSettings {
 // ─── Africa Countries & Currencies ────────────────────────────────────────────
 
 export const AFRICAN_COUNTRIES = [
-  { code: 'KE', name: 'Kenya', currency: 'KES', mobilePayments: ['mpesa'] },
+  { code: 'KE', name: 'Kenya', currency: 'TSH', mobilePayments: ['mpesa'] },
   { code: 'TZ', name: 'Tanzania', currency: 'TZS', mobilePayments: ['mpesa', 'tigo_pesa', 'airtel_money'] },
   { code: 'UG', name: 'Uganda', currency: 'UGX', mobilePayments: ['mtn_momo', 'airtel_money'] },
   { code: 'GH', name: 'Ghana', currency: 'GHS', mobilePayments: ['mtn_momo', 'airtel_money'] },
@@ -2405,3 +2405,4 @@ export const MOBILE_PAYMENT_PROVIDERS: Record<MobileMoneyProvider, {
   mtn_momo: { name: 'MTN Mobile Money', logo: '/payments/mtn.png', countries: ['UG', 'GH', 'RW', 'CI', 'CM', 'NG'] },
   orange_money: { name: 'Orange Money', logo: '/payments/orange.png', countries: ['CI', 'SN', 'CM'] },
 };
+

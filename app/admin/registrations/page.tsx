@@ -1,44 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { useRegistration } from '@/lib/registration-context';
-import { RegistrationStatus } from '@/lib/college-types';
-import { Search, Eye, CheckCircle2, XCircle, Trash2, Filter, Download, PlusCircle } from 'lucide-react';
 import type { StudentRegistration } from '@/lib/college-types';
+import { RegistrationStatus } from '@/lib/college-types';
+import { useRegistration } from '@/lib/registration-context';
+import { CheckCircle2, Download, Eye, Filter, PlusCircle, Search, Trash2, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function RegistrationsPage() {
   const router = useRouter();
   const { registrations, getRegistrations, approveRegistration, rejectRegistration, deleteRegistration, loading } = useRegistration();
+  const { isAuthenticated } = useAuth();
   
   const [filteredRegistrations, setFilteredRegistrations] = useState<StudentRegistration[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,8 +51,10 @@ export default function RegistrationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
-    loadRegistrations();
-  }, []);
+    if (isAuthenticated) {
+      loadRegistrations();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     filterRegistrations();
@@ -131,6 +135,14 @@ export default function RegistrationsPage() {
       </Badge>
     );
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <p className="text-muted-foreground">Please log in to access registrations.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4">

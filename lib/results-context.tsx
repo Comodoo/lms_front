@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiClient } from './api-client';
 import type {
   ExamResult,
   SemesterResult,
@@ -41,6 +42,7 @@ interface ResultsContextType {
   // Student Profiles
   getStudentProfiles: () => Promise<StudentProfile[]>;
   getStudentProfileByRegistration: (registrationNumber: string) => Promise<StudentProfile | null>;
+  deleteStudentProfile: (id: string) => Promise<void>;
   
   // Grade Calculation
   calculateGrade: (score: number) => { grade: GradeScale; points: number };
@@ -121,230 +123,38 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadStudentProfiles = async () => {
-    // Mock data - replace with API call
-    const mockStudentProfiles: StudentProfile[] = [
-      {
-        id: 'student-1',
-        userId: 'user-1',
-        registrationId: 'reg-1',
-        registrationNumber: 'T21-03-12812',
-        programId: 'prog-1',
-        programName: 'Computer Science',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
+    try {
+      // Use apiClient.getRegistrations('approved') to get approved students instead of mock data
+      const regs = await apiClient.getRegistrations('approved');
+      
+      const realStudentProfiles: StudentProfile[] = regs.map((reg: any) => ({
+        id: reg.id.toString(), // The ID of the student profile (using registration ID)
+        userId: reg.user_id?.toString() || '',
+        registrationId: reg.id.toString(),
+        registrationNumber: reg.registrationNumber || '',
+        programId: reg.programId?.toString() || '',
+        programName: reg.programName || 'Not Assigned',
+        department: reg.department || 'N/A',
+        intake: reg.intake || 'Main Intake',
+        studyMode: reg.studyMode || 'full_time',
         currentYear: 1,
         currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 3.5,
-        cgpa: 3.5,
-        totalCreditsEarned: 18,
+        currentAcademicYear: '2025/2026',
+        gpa: 0.0,
+        cgpa: 0.0,
+        totalCreditsEarned: 0,
         status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-2',
-        userId: 'user-2',
-        registrationId: 'reg-2',
-        registrationNumber: 'T21-03-12813',
-        programId: 'prog-1',
-        programName: 'Computer Science',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 2.8,
-        cgpa: 2.8,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-3',
-        userId: 'user-3',
-        registrationId: 'reg-3',
-        registrationNumber: 'T21-03-12814',
-        programId: 'prog-2',
-        programName: 'Information Technology',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 1.4,
-        cgpa: 1.4,
-        totalCreditsEarned: 12,
-        status: 'suspended',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-4',
-        userId: 'user-4',
-        registrationId: 'reg-4',
-        registrationNumber: 'T21-03-12815',
-        programId: 'prog-2',
-        programName: 'Information Technology',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 1.8,
-        cgpa: 1.8,
-        totalCreditsEarned: 15,
-        status: 'suspended',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-5',
-        userId: 'user-5',
-        registrationId: 'reg-5',
-        registrationNumber: 'T21-03-12816',
-        programId: 'prog-1',
-        programName: 'Computer Science',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 3.2,
-        cgpa: 3.2,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-6',
-        userId: 'user-6',
-        registrationId: 'reg-6',
-        registrationNumber: 'T21-03-12817',
-        programId: 'prog-3',
-        programName: 'Business Administration',
-        department: 'School of Business',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 1.7,
-        cgpa: 1.7,
-        totalCreditsEarned: 9,
-        status: 'suspended',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-7',
-        userId: 'user-7',
-        registrationId: 'reg-7',
-        registrationNumber: 'T21-03-12818',
-        programId: 'prog-3',
-        programName: 'Business Administration',
-        department: 'School of Business',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 1.9,
-        cgpa: 1.9,
-        totalCreditsEarned: 12,
-        status: 'suspended',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-8',
-        userId: 'user-8',
-        registrationId: 'reg-8',
-        registrationNumber: 'T21-03-12819',
-        programId: 'prog-1',
-        programName: 'Computer Science',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 3.8,
-        cgpa: 3.8,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-9',
-        userId: 'user-9',
-        registrationId: 'reg-9',
-        registrationNumber: 'T21-03-12820',
-        programId: 'prog-2',
-        programName: 'Information Technology',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 2.5,
-        cgpa: 2.5,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-10',
-        userId: 'user-10',
-        registrationId: 'reg-10',
-        registrationNumber: 'T21-03-12821',
-        programId: 'prog-3',
-        programName: 'Business Administration',
-        department: 'School of Business',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 2.9,
-        cgpa: 2.9,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: 'student-11',
-        userId: 'user-11',
-        registrationId: 'reg-11',
-        registrationNumber: 'T21-03-12822',
-        programId: 'prog-2',
-        programName: 'Information Technology',
-        department: 'School of Computing',
-        intake: 'January 2026',
-        studyMode: 'full_time',
-        currentYear: 1,
-        currentSemester: 'first',
-        currentAcademicYear: '2024/2025',
-        gpa: 3.1,
-        cgpa: 3.1,
-        totalCreditsEarned: 18,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
-    setStudentProfiles(mockStudentProfiles);
+        createdAt: new Date(reg.createdAt || Date.now()),
+        updatedAt: new Date(reg.updatedAt || Date.now()),
+        // Add name fields since Student Registry page needs to display them
+        firstName: reg.firstName,
+        lastName: reg.lastName,
+      }));
+      setStudentProfiles(realStudentProfiles);
+    } catch (error) {
+      console.error('Failed to load real student profiles', error);
+      setStudentProfiles([]);
+    }
   };
 
   const loadExamResults = async () => {
@@ -670,6 +480,13 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
     return studentProfiles.find(p => p.registrationNumber === registrationNumber) || null;
   };
 
+  const deleteStudentProfile = async (id: string): Promise<void> => {
+    setLoading(true);
+    // In a real scenario, this would call the API
+    setStudentProfiles(prev => prev.filter(p => p.id !== id));
+    setLoading(false);
+  };
+
   return (
     <ResultsContext.Provider
       value={{
@@ -695,6 +512,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         deleteCourseOffering,
         getStudentProfiles,
         getStudentProfileByRegistration,
+        deleteStudentProfile,
         calculateGrade,
         calculateGPA,
         calculateCGPA,

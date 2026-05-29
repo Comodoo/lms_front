@@ -661,7 +661,7 @@ interface MobilePayment {
   provider: MobileMoneyProvider;
   phoneNumber: string;
   amount: number;
-  currency: 'KES' | 'TZS' | 'UGX' | 'GHS' | 'NGN' | 'ZAR';
+  currency: 'TSH' | 'TZS' | 'UGX' | 'GHS' | 'NGN' | 'ZAR';
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   transactionId?: string;
   reference: string;
@@ -828,3 +828,4 @@ interface CourseCardProps {
   showProgress?: boolean;
 }
 ```
+

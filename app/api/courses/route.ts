@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       subcategory,
       level,
       price,
-      currency = 'KES',
+      currency = 'TSH',
       tags = [],
       prerequisites = [],
       targetAudience = [],
@@ -185,3 +185,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

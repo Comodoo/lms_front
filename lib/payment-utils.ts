@@ -499,7 +499,7 @@ export function formatAmount(amount: number, currency: string): string {
 // Get currency by country
 export function getCurrencyByCountry(countryCode: string): string {
   const currencies: Record<string, string> = {
-    KE: 'KES',
+    KE: 'TSH',
     TZ: 'TZS',
     UG: 'UGX',
     GH: 'GHS',
@@ -513,3 +513,4 @@ export function getCurrencyByCountry(countryCode: string): string {
   
   return currencies[countryCode] || 'USD';
 }
+

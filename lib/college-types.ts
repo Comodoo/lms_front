@@ -166,6 +166,7 @@ export interface StudentProfile {
   userId: string;
   registrationId: string;
   registrationNumber: string;
+  studentName?: string;
   programId: string;
   programName: string;
   department: string;
@@ -467,10 +468,13 @@ export interface RegistrationFormData {
     grade?: string;
     gpa?: number;
     major?: string;
+    document?: File;
   }[];
 
   // Program Information
   programId: string;
+  intake: string;
+  studyMode: 'full_time' | 'part_time' | 'distance_learning';
 
   // Guardian Information
   guardianName: string;
@@ -481,6 +485,7 @@ export interface RegistrationFormData {
 
   // Documents
   documents: File[];
+  nationalIdDocument?: File;
 }
 
 export interface ExamResultFormData {

@@ -53,7 +53,13 @@ async function apiRequest<T>(
     credentials: 'include',
   };
 
-  const response = await fetch(url, config);
+  let response: Response;
+  try {
+    response = await fetch(url, config);
+  } catch (error: any) {
+    console.warn(`[API Client] Network error when fetching ${endpoint}:`, error.message);
+    throw new Error(`Network Error: Failed to connect to backend. Is the server running?`);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));

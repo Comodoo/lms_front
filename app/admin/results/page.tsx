@@ -26,11 +26,9 @@ import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, D
 
 export default function AdminResultsPage() {
   const router = useRouter();
-  const { getSemesterResults, getStudentProfiles, getExamResults, loading } = useResults();
+  const { studentProfiles: rawProfiles, examResults: rawResults, loading } = useResults();
   
   const [mounted, setMounted] = useState(false);
-  const [studentProfiles, setStudentProfiles] = useState<any[]>([]);
-  const [semesterResults, setSemesterResults] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [programFilter, setProgramFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -38,45 +36,49 @@ export default function AdminResultsPage() {
 
   useEffect(() => {
     setMounted(true);
-    loadData();
   }, []);
 
-  useEffect(() => {
-    filterStudents();
-  }, [studentProfiles, searchTerm, programFilter, statusFilter]);
+  // Dynamically enrich students with their results from context
+  const enrichedStudents = rawProfiles.map(student => {
+    const studentResults = rawResults.filter(r => String(r.studentProfileId) === String(student.id));
+    
+    let totalCredits = 0;
+    let totalPoints = 0;
 
-  const loadData = async () => {
-    const students = await getStudentProfiles();
-    const semResults = await getSemesterResults();
-    setStudentProfiles(students);
-    setSemesterResults(semResults);
-  };
+    studentResults.forEach(r => {
+      const credit = Number(r.credits) || 0;
+      const gpaPoints = Number(r.gradePoints) || 0;
+      totalCredits += credit;
+      totalPoints += (gpaPoints * credit);
+    });
 
-  const filterStudents = () => {
-    let filtered = studentProfiles;
+    const cgpa = totalCredits > 0 ? (totalPoints / totalCredits) : 0;
+    
+    return {
+      ...student,
+      cgpa: cgpa,
+      totalCreditsEarned: totalCredits,
+      studentResults: studentResults,
+      status: student.status === 'graduated' ? 'graduated' : (cgpa < 2.0 && totalCredits > 0 ? 'probation' : student.status)
+    };
+  });
 
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (s) =>
-          s.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          s.programName.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  const filteredStudents = enrichedStudents.filter(s => {
+    if (searchTerm && 
+        !s.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !(s.studentName && s.studentName.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        !s.programName.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
     }
-
-    if (programFilter !== 'all') {
-      filtered = filtered.filter((s) => s.programId === programFilter);
+    if (programFilter !== 'all' && s.programId !== programFilter) {
+      return false;
     }
-
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'continue') {
-        filtered = filtered.filter((s) => s.cgpa >= 2.0);
-      } else if (statusFilter === 'discontinue') {
-        filtered = filtered.filter((s) => s.cgpa < 2.0);
-      }
-    }
-
-    setStudentProfiles(filtered);
-  };
+    if (statusFilter === 'continue' && s.cgpa < 2.0) return false;
+    if (statusFilter === 'discontinue' && s.cgpa >= 2.0) return false;
+    
+    // Academic Year filtering logic could be added here if needed
+    return true;
+  });
 
   const getContinuationStatus = (cgpa: number, status: string) => {
     if (status === 'graduated') {
@@ -88,37 +90,38 @@ export default function AdminResultsPage() {
     return { label: 'Good Standing', color: 'bg-green-100 text-green-800', icon: CheckCircle };
   };
 
-  const getStudentSemesterResults = (studentProfileId: string) => {
-    return semesterResults.filter(r => r.studentProfileId === studentProfileId);
-  };
+  const getStudentLatestGPA = (studentProfileId: string) => {
+    const student = enrichedStudents.find(s => String(s.id) === String(studentProfileId));
+    if (!student || !student.studentResults || student.studentResults.length === 0) return 0;
 
-  const getStudentYearlyGPA = (studentProfileId: string) => {
-    const results = semesterResults.filter(r => r.studentProfileId === studentProfileId);
-    const yearlyGPA: Record<string, number[]> = {};
+    const semStats: Record<string, { points: number, credits: number }> = {};
     
-    results.forEach(r => {
-      const year = r.academicYear.split('/')[0];
-      if (!yearlyGPA[year]) {
-        yearlyGPA[year] = [];
+    student.studentResults.forEach((r: any) => {
+      // Group by academic year and semester to isolate the latest one
+      const semKey = `${r.academicYear} - ${r.semester}`;
+      if (!semStats[semKey]) {
+        semStats[semKey] = { points: 0, credits: 0 };
       }
-      yearlyGPA[year].push(r.semesterGPA);
+      semStats[semKey].points += (Number(r.gradePoints) * Number(r.credits));
+      semStats[semKey].credits += Number(r.credits);
     });
 
-    return Object.entries(yearlyGPA).map(([year, gpas]) => ({
-      year,
-      averageGPA: gpas.reduce((a, b) => a + b, 0) / gpas.length,
-      semesterCount: gpas.length,
-    }));
+    // Sort to find the latest semester
+    const sortedSemKeys = Object.keys(semStats).sort();
+    const latestSemKey = sortedSemKeys[sortedSemKeys.length - 1];
+    
+    const stats = semStats[latestSemKey];
+    return stats.credits > 0 ? (stats.points / stats.credits) : 0;
   };
 
   const stats = {
-    total: studentProfiles.length,
-    goodStanding: studentProfiles.filter(s => s.cgpa >= 2.0 && s.status === 'active').length,
-    probation: studentProfiles.filter(s => s.status === 'probation').length,
-    discontinued: studentProfiles.filter(s => s.status === 'withdrawn' || s.status === 'suspended' || s.cgpa < 2.0).length,
-    graduated: studentProfiles.filter(s => s.status === 'graduated').length,
-    averageCGPA: studentProfiles.length > 0 
-      ? studentProfiles.reduce((sum, s) => sum + (s.cgpa || 0), 0) / studentProfiles.length 
+    total: enrichedStudents.length,
+    goodStanding: enrichedStudents.filter(s => s.cgpa >= 2.0 && s.status !== 'graduated' && s.status !== 'withdrawn' && s.status !== 'suspended').length,
+    probation: enrichedStudents.filter(s => s.status === 'probation').length,
+    discontinued: enrichedStudents.filter(s => s.status === 'withdrawn' || s.status === 'suspended' || s.cgpa < 2.0).length,
+    graduated: enrichedStudents.filter(s => s.status === 'graduated').length,
+    averageCGPA: enrichedStudents.length > 0 
+      ? enrichedStudents.reduce((sum, s) => sum + (s.cgpa || 0), 0) / enrichedStudents.length 
       : 0,
   };
 
@@ -205,7 +208,7 @@ export default function AdminResultsPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by registration number or program..."
+                placeholder="Search by name, reg number, or program..."
                 value={searchTerm || ''}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -243,7 +246,7 @@ export default function AdminResultsPage() {
         <CardHeader>
           <CardTitle>Student Academic Performance</CardTitle>
           <CardDescription>
-            Track CGPA, yearly GPA trends, and continuation status
+            Track CGPA, credit accumulation, and continuation status
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -251,11 +254,12 @@ export default function AdminResultsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Reg. Number</TableHead>
+                <TableHead>Student Name</TableHead>
                 <TableHead>Program</TableHead>
                 <TableHead>Current Year</TableHead>
                 <TableHead>Semester</TableHead>
                 <TableHead>CGPA</TableHead>
-                <TableHead>Yearly GPA</TableHead>
+                <TableHead>GPA</TableHead>
                 <TableHead>Credits</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Continuation</TableHead>
@@ -263,21 +267,22 @@ export default function AdminResultsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {studentProfiles.length === 0 ? (
+              {filteredStudents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No students found
                   </TableCell>
                 </TableRow>
               ) : (
-                studentProfiles.map((student) => {
+                filteredStudents.map((student) => {
                   const continuationStatus = getContinuationStatus(student.cgpa || 0, student.status);
-                  const yearlyGPA = getStudentYearlyGPA(student.id);
                   const StatusIcon = continuationStatus.icon;
-
+                  const latestGPA = getStudentLatestGPA(student.id);
+                  
                   return (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">{student.registrationNumber}</TableCell>
+                      <TableCell className="capitalize">{student.studentName}</TableCell>
                       <TableCell>{student.programName}</TableCell>
                       <TableCell>Year {student.currentYear}</TableCell>
                       <TableCell className="capitalize">{student.currentSemester}</TableCell>
@@ -287,14 +292,7 @@ export default function AdminResultsPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {yearlyGPA.map((gpa, idx) => (
-                            <Badge key={idx} variant="outline" className="text-xs">
-                              {gpa.year}: {gpa.averageGPA.toFixed(2)}
-                            </Badge>
-                          ))}
-                          {yearlyGPA.length === 0 && <span className="text-muted-foreground text-sm">No data</span>}
-                        </div>
+                        <span className="font-semibold text-gray-700">{latestGPA.toFixed(2)}</span>
                       </TableCell>
                       <TableCell>{student.totalCreditsEarned}</TableCell>
                       <TableCell>

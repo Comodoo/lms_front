@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth-context';
+import { paymentsApi, registrationsApi } from '@/lib/api';
 import {
   CreditCard,
   TrendingUp,
@@ -14,45 +16,85 @@ import {
 export default function AccountantDashboardPage() {
   const { user } = useAuth();
 
-  // Mock data - will be replaced with API calls
+  const [payments, setPayments] = useState<any[]>([]);
+  const [registrations, setRegistrations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [paymentsRes, registrationsRes] = await Promise.all([
+          paymentsApi.getAll(),
+          registrationsApi.getAll()
+        ]);
+        
+        if (paymentsRes.data) setPayments(paymentsRes.data as any[]);
+        if (registrationsRes.data) setRegistrations(registrationsRes.data as any[]);
+      } catch (error) {
+        console.error("Failed to load dashboard data", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  const today = new Date().toISOString().split('T')[0];
+  const todayPayments = payments.filter(p => (p.paid_at || p.created_at || '').startsWith(today) && p.status === 'completed');
+  const totalPaymentsToday = todayPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  
+  const pendingVerifications = payments.filter(p => p.status === 'pending').length;
+  const activeStudents = registrations.length;
+  
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthlyPayments = payments.filter(p => (p.paid_at || p.created_at || '').startsWith(currentMonth) && p.status === 'completed');
+  const monthlyRevenue = monthlyPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
   const stats = [
     {
       title: 'Total Payments Today',
-      value: 'TSH 125,000',
-      change: '+12%',
-      trend: 'up',
+      value: `TSH ${totalPaymentsToday.toLocaleString()}`,
+      change: 'Today',
+      trend: totalPaymentsToday > 0 ? 'up' : 'down',
       icon: CreditCard,
     },
     {
       title: 'Pending Verifications',
-      value: '8',
-      change: '-3',
-      trend: 'down',
+      value: pendingVerifications.toString(),
+      change: 'Action Required',
+      trend: pendingVerifications > 0 ? 'up' : 'down',
       icon: Receipt,
     },
     {
       title: 'Active Students',
-      value: '1,248',
-      change: '+24',
+      value: activeStudents.toString(),
+      change: 'Total Registered',
       trend: 'up',
       icon: Users,
     },
     {
       title: 'Monthly Revenue',
-      value: 'TSH 2.4M',
-      change: '+8%',
-      trend: 'up',
+      value: `TSH ${monthlyRevenue.toLocaleString()}`,
+      change: 'This Month',
+      trend: monthlyRevenue > 0 ? 'up' : 'down',
       icon: TrendingUp,
     },
   ];
 
-  const recentPayments = [
-    { id: 'PAY-001', student: 'John Doe', amount: 'TSH 50,000', type: 'Tuition Fee', status: 'completed', date: '2024-04-29' },
-    { id: 'PAY-002', student: 'Jane Smith', amount: 'TSH 25,000', type: 'Library Fee', status: 'pending', date: '2024-04-29' },
-    { id: 'PAY-003', student: 'Mike Johnson', amount: 'TSH 75,000', type: 'Tuition Fee', status: 'completed', date: '2024-04-28' },
-    { id: 'PAY-004', student: 'Sarah Williams', amount: 'TSH 5,000', type: 'Examination Fee', status: 'completed', date: '2024-04-28' },
-    { id: 'PAY-005', student: 'David Brown', amount: 'TSH 30,000', type: 'Hostel Fee', status: 'pending', date: '2024-04-27' },
-  ];
+  // Get top 5 most recent payments
+  const recentPayments = [...payments]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5)
+    .map(p => ({
+      id: p.id,
+      student: p.student_name || (p.registration ? `${p.registration.first_name} ${p.registration.last_name}` : 'Unknown'),
+      amount: `TSH ${Number(p.amount).toLocaleString()}`,
+      type: p.fee_type?.replace(/_/g, ' '),
+      status: p.status,
+      date: new Date(p.created_at).toLocaleDateString()
+    }));
 
   return (
     <div className="space-y-6">

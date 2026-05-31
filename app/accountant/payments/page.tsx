@@ -58,7 +58,7 @@ export default function AccountantPaymentsPage() {
     if (response.error) {
       setError(response.error);
     } else if (response.data) {
-      setPayments(response.data);
+      setPayments(response.data as Payment[]);
     }
     setLoading(false);
   };
@@ -75,7 +75,7 @@ export default function AccountantPaymentsPage() {
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch = 
       payment.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(payment.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       payment.control_number?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
@@ -129,8 +129,8 @@ export default function AccountantPaymentsPage() {
     );
   }
 
-  const totalAmount = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
-  const pendingAmount = filteredPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
+  const totalAmount = filteredPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const pendingAmount = filteredPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const completedCount = filteredPayments.filter(p => p.status === 'completed').length;
 
   return (
@@ -154,9 +154,9 @@ export default function AccountantPaymentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Amount</p>
-                <p className="text-2xl font-bold">TSH {totalAmount.toLocaleString()}</p>
+                <p className="text-2xl font-bold break-all">TSH {totalAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0 ml-4">
                 <CreditCard className="h-6 w-6 text-primary" />
               </div>
             </div>
@@ -168,9 +168,9 @@ export default function AccountantPaymentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Pending Amount</p>
-                <p className="text-2xl font-bold text-yellow-600">TSH {pendingAmount.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-yellow-600 break-all">TSH {pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center shrink-0 ml-4">
                 <Filter className="h-6 w-6 text-yellow-600" />
               </div>
             </div>

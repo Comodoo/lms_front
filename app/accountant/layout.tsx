@@ -47,6 +47,11 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
     setMounted(true);
   }, []);
 
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
   if (!mounted) {
     return null;
   }
@@ -95,6 +100,9 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
                   <p className="text-sm font-medium truncate text-white">{user?.name}</p>
                   <p className="text-xs text-white/70 truncate">{user?.email}</p>
                 </div>
+                <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/20">
+                  <LogOut className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -141,6 +149,9 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
                 <p className="text-sm font-medium truncate text-white">{user?.name}</p>
                 <p className="text-xs text-white/70 truncate">{user?.email}</p>
               </div>
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/20">
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -186,7 +197,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
                     Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="text-destructive">
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
                     Logout
                   </DropdownMenuItem>

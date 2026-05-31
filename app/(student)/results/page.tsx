@@ -64,9 +64,9 @@ export default function StudentResultsPage() {
         code: res.course_offering.course.code,
         name: res.course_offering.course.name,
         type: res.course_offering.course.type || 'Core',
-        credit: parseFloat(res.course_offering.course.credits || 0),
+        credit: parseFloat(res.course_offering.course.credit_hours || res.course_offering.course.credits || 0),
         grade: res.grade,
-        remarks: res.total_score >= 35 ? 'Pass' : 'Failed'
+        remarks: res.total_score >= 40 ? 'Pass' : 'Failed'
       });
     });
 

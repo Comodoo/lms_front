@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { coursesApi } from '@/lib/api';
+import { apiClient } from '@/lib/api-client';
 import { useLMS } from '@/lib/lms-context';
 import { useResults } from '@/lib/results-context';
 import {
@@ -21,6 +22,7 @@ interface Course {
   code: string;
   name: string;
   description: string;
+  program_id?: number | string;
   department?: {
     name: string;
   };
@@ -38,33 +40,43 @@ export default function InstructorDashboard() {
   const { currentUser } = useLMS();
   const { examResults } = useResults();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [studentsCount, setStudentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const studentsCount = courses.length > 0 ? courses.length * 14 : 0; // Estimate based on assigned courses
   const pendingResults = examResults.filter(r => r.status === 'submitted').length;
   const approvedResults = examResults.filter(r => r.status === 'approved').length;
 
   useEffect(() => {
-    loadMyCourses();
+    loadDashboardData();
   }, []);
 
-  const loadMyCourses = async () => {
+  const loadDashboardData = async () => {
     setLoading(true);
     try {
-      console.log('Loading instructor courses...');
-      const response = await coursesApi.getMyCourses();
-      console.log('API response:', response);
-      if (response.error) {
-        console.error('API error:', response.error);
-        setError(response.error);
-      } else {
-        console.log('Courses data:', response.data);
-        setCourses(response.data || []);
-      }
+      const [coursesRes, registrations] = await Promise.all([
+        coursesApi.getMyCourses().catch(() => ({ data: [] })),
+        apiClient.getRegistrations().catch(() => [])
+      ]);
+      
+      const fetchedCourses = coursesRes.data || [];
+      setCourses(fetchedCourses);
+
+      // Calculate real student count:
+      // A student is considered in this instructor's courses if their program_id matches
+      // the program_id of any course the instructor teaches.
+      const instructorProgramIds = new Set(
+        fetchedCourses
+          .filter(c => c.program_id)
+          .map(c => String(c.program_id))
+      );
+      
+      const uniqueStudents = registrations.filter(reg => instructorProgramIds.has(String(reg.programId)));
+      setStudentsCount(uniqueStudents.length);
+      
     } catch (err) {
-      console.error('Failed to load courses:', err);
-      setError('Failed to load courses');
+      console.error('Failed to load dashboard data:', err);
+      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }

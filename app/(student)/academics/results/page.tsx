@@ -1,8 +1,9 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 
 type CourseResult = {
   id: number;
@@ -33,64 +34,6 @@ type YearData = {
   };
 };
 
-// Sample data matching the screenshot
-const academicYears: YearData[] = [
-  {
-    id: 1,
-    year: '1st Year of Study',
-    academicYear: '2021/2022 Academic Year',
-    semesters: [
-      { name: 'Semester One', academicYear: '2021/2022 Academic Year', courses: [] },
-      { name: 'Semester Two', academicYear: '2021/2022 Academic Year', courses: [] },
-    ],
-    summary: { totalCredits: null, totalGradePoints: null, gpa: null, remarks: null },
-  },
-  {
-    id: 2,
-    year: '2nd Year of Study',
-    academicYear: '2022/2023 Academic Year',
-    semesters: [
-      { name: 'Semester One', academicYear: '2022/2023 Academic Year', courses: [] },
-      { name: 'Semester Two', academicYear: '2022/2023 Academic Year', courses: [] },
-    ],
-    summary: { totalCredits: null, totalGradePoints: null, gpa: null, remarks: null },
-  },
-  {
-    id: 3,
-    year: '3rd Year of Study',
-    academicYear: '2023/2024 Academic Year',
-    semesters: [
-      { name: 'Semester One', academicYear: '2023/2024 Academic Year', courses: [] },
-      { name: 'Semester Two', academicYear: '2023/2024 Academic Year', courses: [] },
-    ],
-    summary: { totalCredits: null, totalGradePoints: null, gpa: null, remarks: null },
-  },
-  {
-    id: 4,
-    year: '4th Year of Study',
-    academicYear: '2024/2025 Academic Year',
-    semesters: [
-      {
-        name: 'Semester One',
-        academicYear: '2024/2025 Academic Year',
-        courses: [
-          { id: 1, code: 'CP 412', name: 'C# Programming', type: 'Core', credit: 9.0, grade: 'B+', remarks: 'Pass' },
-          { id: 2, code: 'CT 312', name: 'Computer Maintenance', type: 'Core', credit: 9.0, grade: 'B+', remarks: 'Pass' },
-          { id: 3, code: 'IM 411', name: 'Human Computer Interaction', type: 'Core', credit: 7.5, grade: 'C', remarks: 'Pass' },
-          { id: 4, code: 'BT 413', name: 'Ict Project Management', type: 'Core', credit: 6.0, grade: 'B', remarks: 'Pass' },
-          { id: 5, code: 'CS 332', name: 'Industrial Practical Training III', type: 'Core', credit: 9.6, grade: 'A', remarks: 'Pass' },
-          { id: 6, code: 'SI 311', name: 'Professional Ethics And Conduct', type: 'Core', credit: 7.5, grade: 'C', remarks: 'Pass' },
-          { id: 7, code: 'CS 431', name: 'Software Engineering Project I', type: 'Core', credit: 7.0, grade: 'A', remarks: 'Pass' },
-          { id: 8, code: 'CS 411', name: 'Software Reverse Engineering', type: 'Core', credit: 9.0, grade: 'A', remarks: 'Pass' },
-          { id: 9, code: 'CP 314', name: 'Distributed Computing', type: 'Elective', credit: 7.5, grade: 'C', remarks: 'Pass' },
-        ],
-      },
-      { name: 'Semester Two', academicYear: '2024/2025 Academic Year', courses: [] },
-    ],
-    summary: { totalCredits: null, totalGradePoints: null, gpa: null, remarks: null },
-  },
-];
-
 const getRemarksColor = (remarks: string) => {
   switch (remarks) {
     case 'Pass':
@@ -105,8 +48,80 @@ const getRemarksColor = (remarks: string) => {
 };
 
 export default function ResultsPage() {
-  const [openSections, setOpenSections] = useState<number[]>([4]); // 4th year open by default
-  const [openSemesters, setOpenSemesters] = useState<string[]>(['4-Semester One']);
+  const [openSections, setOpenSections] = useState<number[]>([1]);
+  const [openSemesters, setOpenSemesters] = useState<string[]>(['1-Semester One']);
+  const [academicYears, setAcademicYears] = useState<YearData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchResults() {
+      try {
+        const response = await apiClient.getStudentResults();
+        const { results } = response as any;
+        if (!results) return;
+
+        const yearsMap: { [key: string]: YearData } = {};
+        
+        results.forEach((res: any) => {
+          const academicYear = res.course_offering.academic_year;
+          if (!yearsMap[academicYear]) {
+            yearsMap[academicYear] = {
+              id: Object.keys(yearsMap).length + 1,
+              year: academicYear + ' Academic Year',
+              academicYear: academicYear,
+              semesters: [],
+              summary: { totalCredits: 0, totalGradePoints: 0, gpa: 0, remarks: 'Pass' }
+            };
+          }
+
+          const semValue = res.course_offering.semester;
+          const semName = semValue === 'first' ? 'Semester One' : (semValue === 'second' ? 'Semester Two' : 'Semester ' + semValue);
+          
+          let semester = yearsMap[academicYear].semesters.find(s => s.name === semName);
+          if (!semester) {
+            semester = { name: semName, academicYear, courses: [] };
+            yearsMap[academicYear].semesters.push(semester);
+          }
+
+          const credit = parseFloat(res.course_offering.course.credit_hours || res.course_offering.course.credits || 0);
+          const points = parseFloat(res.gpa_points || 0);
+          
+          yearsMap[academicYear].summary.totalCredits! += credit;
+          yearsMap[academicYear].summary.totalGradePoints! += points;
+
+          semester.courses.push({
+            id: res.id,
+            code: res.course_offering.course.code,
+            name: res.course_offering.course.name,
+            type: res.course_offering.course.type || 'Core',
+            credit: credit,
+            grade: res.grade,
+            remarks: res.total_score >= 40 ? 'Pass' : 'Failed'
+          });
+        });
+
+        const sortedYears = Object.values(yearsMap).map(y => {
+          if (y.summary.totalCredits! > 0) {
+            y.summary.gpa = Number((y.summary.totalGradePoints! / y.summary.totalCredits!).toFixed(2));
+          }
+          return y;
+        }).sort((a, b) => b.academicYear.localeCompare(a.academicYear));
+
+        setAcademicYears(sortedYears);
+        if (sortedYears.length > 0) {
+          setOpenSections([sortedYears[0].id]);
+          if (sortedYears[0].semesters.length > 0) {
+            setOpenSemesters([`${sortedYears[0].id}-${sortedYears[0].semesters[0].name}`]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load results:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchResults();
+  }, []);
 
   const toggleSection = (id: number) => {
     setOpenSections((prev) =>
@@ -119,6 +134,24 @@ export default function ResultsPage() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-slate-500 font-medium animate-pulse">Loading results...</p>
+      </div>
+    );
+  }
+
+  if (academicYears.length === 0) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h3 className="text-lg font-medium text-gray-900">No Results Available</h3>
+        <p className="text-gray-500 mt-2">You don't have any published exam results yet.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -235,9 +268,9 @@ export default function ResultsPage() {
                               <tbody>
                                 {semester.courses.map((course, idx) => (
                                   <tr key={course.id} className={cn('border-b', idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
-                                    <td className="py-3 px-4 text-sm text-gray-900">{course.id}</td>
-                                    <td className="py-3 px-4 text-sm text-gray-900 font-medium">{course.code}</td>
-                                    <td className="py-3 px-4 text-sm text-gray-900">{course.name}</td>
+                                    <td className="py-3 px-4 text-sm text-gray-900">{idx + 1}</td>
+                                    <td className="py-3 px-4 text-sm text-gray-900 font-medium uppercase">{course.code}</td>
+                                    <td className="py-3 px-4 text-sm text-gray-900 capitalize">{course.name}</td>
                                     <td className="py-3 px-4 text-sm">
                                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                         {course.type}

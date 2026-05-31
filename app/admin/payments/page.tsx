@@ -38,19 +38,13 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(style);
 }
 
-const MOCK_PAYMENTS = [
-  { id: '1', studentName: 'Almuzany I. M.', regNumber: 'T21-03-12812', feeType: 'tuition', amount: 1560000, currency: 'TSH', method: 'bank_transfer', controlNumber: '9912003445', date: '2026-04-15', status: 'completed' },
-  { id: '2', studentName: 'Sarah John', regNumber: 'T21-03-12815', feeType: 'registration', amount: 50000, currency: 'TSH', method: 'mpesa', controlNumber: '9912003446', date: '2026-04-16', status: 'completed' },
-  { id: '3', studentName: 'James Peter', regNumber: 'T21-03-12818', feeType: 'tuition', amount: 1560000, currency: 'TSH', method: 'bank_transfer', controlNumber: '9912003447', date: '2026-04-14', status: 'pending' },
-  { id: '4', studentName: 'Zainab Ally', regNumber: 'T21-03-12820', feeType: 'library', amount: 25000, currency: 'TSH', method: 'card', controlNumber: '9912003448', date: '2026-04-13', status: 'completed' },
-];
-
 export default function AdminPaymentsPage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
 
   const [fees, setFees] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,12 +78,14 @@ export default function AdminPaymentsPage() {
       setError(null);
       try {
           // Pass true to getFees to fetch ALL fees (including inactive ones)
-          const [feesRes, programsRes] = await Promise.all([
+          const [feesRes, programsRes, paymentsRes] = await Promise.all([
               apiClient.getFees(undefined, true),
               apiClient.getPrograms(),
+              apiClient.getPayments(),
           ]);
-          setFees(feesRes || []);
-          setPrograms(programsRes || []);
+          setFees((feesRes as any[]) || []);
+          setPrograms((programsRes as any[]) || []);
+          setPayments((paymentsRes as any[]) || []);
       } catch (err: any) {
           setError(err.message || 'Failed to load data');
       }
@@ -186,11 +182,11 @@ export default function AdminPaymentsPage() {
       setIsFeeDialogOpen(true);
   };
 
-  const totalRevenue = MOCK_PAYMENTS
+  const totalRevenue = payments
     .filter(p => p.status === 'completed')
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + Number(p.amount), 0);
 
-  const completedRegistrations = MOCK_PAYMENTS.filter(p => p.status === 'completed').length;
+  const completedRegistrations = payments.filter(p => p.status === 'completed').length;
 
   const filteredFees = fees.filter(
       (f) =>
@@ -250,7 +246,7 @@ export default function AdminPaymentsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{totalRevenue.toLocaleString()}</div>
+                <div className="text-3xl font-bold break-all">{totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground mt-1">Confirmed collections</p>
               </CardContent>
             </Card>
@@ -277,7 +273,7 @@ export default function AdminPaymentsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-blue-600">
-                  {MOCK_PAYMENTS.filter(p => p.status === 'pending').length}
+                  {payments.filter(p => p.status === 'pending').length}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Outstanding invoices</p>
               </CardContent>
@@ -303,14 +299,16 @@ export default function AdminPaymentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {MOCK_PAYMENTS.map((payment) => (
+                  {payments.map((payment) => (
                     <TableRow key={payment.id}>
-                      <TableCell className="font-medium">{payment.studentName}</TableCell>
-                      <TableCell>{payment.regNumber}</TableCell>
-                      <TableCell className="capitalize">{payment.feeType}</TableCell>
-                      <TableCell className="font-mono text-xs">{payment.controlNumber}</TableCell>
-                      <TableCell>{payment.amount.toLocaleString()}</TableCell>
-                      <TableCell>{payment.date}</TableCell>
+                      <TableCell className="font-medium">
+                        {payment.registration ? `${payment.registration.first_name} ${payment.registration.last_name}` : 'Unknown'}
+                      </TableCell>
+                      <TableCell>{payment.registration?.registration_number || (payment.registration ? `ZMC-${String(new Date(payment.registration.created_at || payment.created_at || Date.now()).getFullYear()).slice(-2)}-01-${String(payment.registration.id).padStart(4, '0')}` : 'N/A')}</TableCell>
+                      <TableCell className="capitalize">{payment.fee_type?.replace(/_/g, ' ')}</TableCell>
+                      <TableCell className="font-mono text-xs">{payment.control_number}</TableCell>
+                      <TableCell>{Number(payment.amount).toLocaleString()}</TableCell>
+                      <TableCell>{new Date(payment.paid_at || payment.created_at).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Badge variant={payment.status === 'completed' ? 'secondary' : 'outline'} className={payment.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' : ''}>
                           {payment.status}
@@ -318,6 +316,13 @@ export default function AdminPaymentsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {payments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                        No payments found
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

@@ -1,38 +1,27 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api-client';
 
-const academicYears = [
-  {
-    id: 1,
-    year: '1st Year - Semester One',
-    academicYear: '2021/2022 Academic Year',
-    isOpen: false,
-    courses: [
-      { id: 1, code: 'CP 111', name: 'Principles Of Programming Languages', type: 'Core', credit: 9.0, ca: 31.5, remarks: 'Incomplete' },
-      { id: 2, code: 'DS 102', name: 'Development Perspectives', type: 'Core', credit: 7.5, ca: 26.0, remarks: 'Incomplete' },
-      { id: 3, code: 'IA 112', name: 'Mathematical Foundations Of Information Security', type: 'Core', credit: 7.5, ca: 16.0, remarks: 'Incomplete' },
-      { id: 4, code: 'IT 111', name: 'Introduction To Information Technology', type: 'Core', credit: 7.5, ca: 29.0, remarks: 'Incomplete' },
-      { id: 5, code: 'LG 102', name: 'Communication Skills', type: 'Core', credit: 7.5, ca: 18.0, remarks: 'Incomplete' },
-      { id: 6, code: 'MT 1111', name: 'Discrete Mathematics For Ict', type: 'Core', credit: 7.5, ca: 21.0, remarks: 'Incomplete' },
-      { id: 7, code: 'MT 1112', name: 'Calculus', type: 'Core', credit: 7.5, ca: 35.5, remarks: 'Incomplete' },
-      { id: 8, code: 'MT 1117', name: 'Linear Algebra For Ict', type: 'Core', credit: 7.5, ca: 18.4, remarks: 'Incomplete' },
-    ],
-  },
-  {
-    id: 2,
-    year: '1st Year - Semester Two',
-    academicYear: '2021/2022 Academic Year',
-    isOpen: false,
-    courses: [
-      { id: 9, code: 'CP 112', name: 'Data Structures And Algorithms', type: 'Core', credit: 9.0, ca: 28.5, remarks: 'Incomplete' },
-      { id: 10, code: 'IA 122', name: 'Introduction To Information Security', type: 'Core', credit: 7.5, ca: 22.0, remarks: 'Incomplete' },
-      { id: 11, code: 'IT 121', name: 'Computer Organization And Architecture', type: 'Core', credit: 7.5, ca: 25.0, remarks: 'Incomplete' },
-    ],
-  },
-];
+type CourseAssessment = {
+  id: number;
+  code: string;
+  name: string;
+  type: string;
+  credit: number;
+  ca: number;
+  remarks: string;
+};
+
+type AssessmentSemester = {
+  id: number;
+  year: string;
+  academicYear: string;
+  isOpen: boolean;
+  courses: CourseAssessment[];
+};
 
 const getRemarksColor = (remarks: string) => {
   switch (remarks) {
@@ -48,13 +37,93 @@ const getRemarksColor = (remarks: string) => {
 };
 
 export default function AssessmentsPage() {
-  const [openSections, setOpenSections] = useState<number[]>([1]);
+  const [openSections, setOpenSections] = useState<number[]>([]);
+  const [academicYears, setAcademicYears] = useState<AssessmentSemester[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAssessments() {
+      try {
+        const response = await apiClient.getStudentResults();
+        const { results } = response as any;
+        if (!results) return;
+
+        const semestersMap: { [key: string]: AssessmentSemester } = {};
+
+        results.forEach((res: any) => {
+          const academicYear = res.course_offering.academic_year;
+          const semValue = res.course_offering.semester;
+          const semName = semValue === 'first' ? 'Semester One' : (semValue === 'second' ? 'Semester Two' : 'Semester ' + semValue);
+          const key = `${academicYear}-${semName}`;
+
+          if (!semestersMap[key]) {
+            semestersMap[key] = {
+              id: Object.keys(semestersMap).length + 1,
+              year: `Year - ${semName}`,
+              academicYear: academicYear,
+              isOpen: false,
+              courses: []
+            };
+          }
+
+          const credit = parseFloat(res.course_offering.course.credit_hours || res.course_offering.course.credits || 0);
+          const ca = parseFloat(res.cat1_score || 0) + parseFloat(res.cat2_score || 0) + parseFloat(res.assignment_score || 0);
+
+          semestersMap[key].courses.push({
+            id: res.id,
+            code: res.course_offering.course.code,
+            name: res.course_offering.course.name,
+            type: res.course_offering.course.type || 'Core',
+            credit: credit,
+            ca: ca,
+            remarks: ca >= 16 ? 'Pass' : 'Incomplete' // CA pass mark is typically 16 out of 40 (40%)
+          });
+        });
+
+        const sortedSemesters = Object.values(semestersMap).sort((a, b) => {
+          if (b.academicYear === a.academicYear) {
+             return b.year.localeCompare(a.year);
+          }
+          return b.academicYear.localeCompare(a.academicYear);
+        });
+
+        setAcademicYears(sortedSemesters);
+        
+        if (sortedSemesters.length > 0) {
+          setOpenSections([sortedSemesters[0].id]);
+        }
+      } catch (error) {
+        console.error('Failed to load assessments:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAssessments();
+  }, []);
 
   const toggleSection = (id: number) => {
     setOpenSections((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-slate-500 font-medium animate-pulse">Loading assessments...</p>
+      </div>
+    );
+  }
+
+  if (academicYears.length === 0) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h3 className="text-lg font-medium text-gray-900">No Assessments Available</h3>
+        <p className="text-gray-500 mt-2">You don't have any published continuous assessments yet.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -108,20 +177,21 @@ export default function AssessmentsPage() {
                   <tbody>
                     {year.courses.map((course, idx) => (
                       <tr key={course.id} className={cn('border-b', idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
-                        <td className="py-3 px-4 text-sm text-gray-900">{course.id}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{course.code}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{course.name}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900">{idx + 1}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900 uppercase font-medium">{course.code}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900 capitalize">{course.name}</td>
                         <td className="py-3 px-4 text-sm">
                           <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
                             {course.type}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-900">{course.credit}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{course.ca.toFixed(1)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900 font-bold">{course.ca.toFixed(1)}</td>
                         <td className="py-3 px-4 text-sm">
                           <span className={cn('inline-flex items-center px-2 py-1 rounded text-xs font-medium', getRemarksColor(course.remarks))}>
                             {course.remarks}
                           </span>
+                           <span className="ml-2 text-[10px] text-gray-400">/ 40</span>
                         </td>
                         <td className="py-3 px-4 text-sm">
                           <button className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors">

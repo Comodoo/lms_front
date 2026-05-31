@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { useRegistration } from '@/lib/registration-context';
@@ -17,27 +18,9 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-// We will derive studentData dynamically in the component instead of mock data
-
-const semesterData = [
-  {
-    id: 1,
-    name: 'SEMESTER ONE',
-    period: 'Apr 22, 2026 - Apr 22, 2026',
-    status: 'Registration Period Passed',
-    active: false,
-  },
-  {
-    id: 2,
-    name: 'SEMESTER TWO',
-    period: 'Apr 23, 2026 - Apr 24, 2026',
-    status: 'Registration Period Passed',
-    active: false,
-  },
-];
-
 import { RegistrationPayment } from '@/lib/college-types';
 import { apiClient } from '@/lib/api-client';
+import { coursesApi } from '@/lib/api';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -45,41 +28,113 @@ export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState('info');
   const [payments, setPayments] = useState<RegistrationPayment[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [examResults, setExamResults] = useState<any[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [programCoursesCount, setProgramCoursesCount] = useState(0);
 
   const hasRegistration = registrations.length > 0;
   const currentRegistration = registrations[0];
 
   useEffect(() => {
-    const fetchPayments = async () => {
+    const fetchDashboardData = async () => {
       if (currentRegistration?.id) {
         setPaymentsLoading(true);
+        setResultsLoading(true);
         try {
-          const data = await apiClient.getPaymentsByRegistration(currentRegistration.id);
-          setPayments(data);
-        } catch (error) {
-          console.error("Failed to fetch payments", error);
+          const [paymentsData, resultsData, coursesRes] = await Promise.all([
+            apiClient.getPaymentsByRegistration(currentRegistration.id).catch(() => []),
+            apiClient.getStudentResults().catch((err) => { console.error("Student Results Error", err); return []; }),
+            coursesApi.getAll().catch(() => ({ data: [] }))
+          ]);
+          console.log("PAYMENTS DATA:", paymentsData?.length);
+          console.log("RESULTS DATA:", JSON.stringify(resultsData).substring(0, 300));
+          setPayments(paymentsData || []);
+          // Results data might be an array or an object depending on API structure
+          setExamResults(Array.isArray(resultsData) ? resultsData : ((resultsData as any)?.data || []));
+          
+          // Filter courses by the student's program
+          const allCourses = coursesRes?.data || [];
+          if (Array.isArray(allCourses)) {
+            const registeredCourses = allCourses.filter((c: any) => 
+              String(c.program_id) === String(currentRegistration.programId)
+            );
+            setProgramCoursesCount(registeredCourses.length);
+          }
         } finally {
           setPaymentsLoading(false);
+          setResultsLoading(false);
         }
       }
     };
-    fetchPayments();
+    fetchDashboardData();
   }, [currentRegistration?.id]);
+
+  // Generate dynamic academic year and semester
+  const regDate = currentRegistration?.approvedAt || currentRegistration?.submittedAt || new Date().toISOString();
+  const startYear = new Date(regDate).getFullYear();
+  let academicYear = `${startYear}/${startYear + 1}`;
+  let registeredSemester = 1;
+
+  const hasSemester1Payment = payments.some((p: any) => p.status === 'completed' && (p.description?.toLowerCase().includes('semester 1') || p.feeType?.toLowerCase().includes('semester_1') || p.feeType === 'tuition' || p.feeType === 'tuition_fee'));
+  const hasSemester2Payment = payments.some((p: any) => p.status === 'completed' && (p.description?.toLowerCase().includes('semester 2') || p.feeType?.toLowerCase().includes('semester_2')));
+
+  if (examResults && examResults.length > 0) {
+    // If we have exam results (which act as registered courses), use their academic year and semester
+    if (examResults[0].academic_year || examResults[0].academicYear) {
+      academicYear = examResults[0].academic_year || examResults[0].academicYear;
+    }
+    if (examResults[0].semester) {
+      const sem = String(examResults[0].semester).toLowerCase();
+      registeredSemester = sem === 'second' || sem === '2' ? 2 : (sem === 'summer' || sem === '3' ? 3 : 1);
+    }
+  } else {
+    // Fallback to payments if no results
+    registeredSemester = hasSemester2Payment ? 2 : (hasSemester1Payment ? 1 : 1);
+  }
+
+  // Calculate GPA and course stats
+  let totalCourses = programCoursesCount || examResults.length;
+  let coursesCompleted = 0;
+  let totalGradePoints = 0;
+
+  examResults.forEach((result: any) => {
+    const score = Number(result.final_exam_score || result.total_score || result.finalExamScore || result.totalScore || 0);
+    if (score >= 40) coursesCompleted++; // Pass mark
+    
+    // Standard GPA mapping
+    if (score >= 80) totalGradePoints += 5;
+    else if (score >= 70) totalGradePoints += 4;
+    else if (score >= 60) totalGradePoints += 3;
+    else if (score >= 50) totalGradePoints += 2;
+    else if (score >= 40) totalGradePoints += 1;
+  });
+
+  const gpa = totalCourses > 0 ? (totalGradePoints / totalCourses) : 0.0;
+
+  const semesterData = [
+    {
+      id: 1,
+      name: `SEMESTER ${registeredSemester === 1 ? 'ONE' : registeredSemester === 2 ? 'TWO' : registeredSemester}`,
+      period: `Academic Year ${academicYear}`,
+      status: registeredSemester > 1 || hasSemester1Payment ? 'Paid & Registered' : (currentRegistration?.status === 'approved' ? 'Awaiting Payment' : 'Registration Pending'),
+      paid: registeredSemester > 1 || hasSemester1Payment,
+    },
+  ];
 
   const studentData = {
     studentId: currentRegistration?.registrationNumber || 'Pending...',
     fullName: currentRegistration ? `${currentRegistration.firstName} ${currentRegistration.lastName}` : (user?.name || 'Student'),
     program: currentRegistration?.programName || 'Not Assigned',
     college: 'Main Campus',
-    phone: currentRegistration?.phone || user?.phone || 'N/A',
-    academicYear: '2025/2026',
-    yearOfStudy: '1st Year of Study',
-    gpa: 0.0,
-    cgpa: 0.0,
-    coursesRegistered: 0,
-    registeredSemester: 0,
-    coursesCompleted: 0,
-    totalCourses: 0,
+    phone: currentRegistration?.phone || (user as any)?.phone || 'N/A',
+    academicYear: academicYear,
+    yearOfStudy: '1st Year',
+    gpa: gpa,
+    cgpa: gpa, // CGPA matches GPA for first year
+    coursesRegistered: totalCourses,
+    registeredSemester: registeredSemester,
+    coursesCompleted: coursesCompleted,
+    totalCourses: totalCourses,
   };
 
   if (!loading && !hasRegistration) {
@@ -186,8 +241,8 @@ export default function StudentDashboard() {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-50 text-red-600 text-xs">
-                            <XCircle className="h-3 w-3" />
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${semester.paid ? 'bg-green-50 text-green-600' : (semester.status === 'Registration Pending' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600')}`}>
+                            {semester.paid ? <CheckCircle2 className="h-3 w-3" /> : (semester.status === 'Registration Pending' ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />)}
                             <span>{semester.status}</span>
                           </div>
                         </td>
@@ -260,33 +315,35 @@ export default function StudentDashboard() {
                     <p className="text-sm">No bills generated yet.</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <Accordion type="single" collapsible className="space-y-4">
                     {payments.map((payment, idx) => (
-                      <div key={payment.id} className="border rounded-lg p-4 bg-white shadow-sm">
-                        <div className="flex items-center justify-between mb-4 border-b pb-3">
-                          <div className="text-sm text-muted-foreground">#{payments.length - idx}</div>
-                          <Badge className={payment.status === 'completed' ? "bg-green-600 text-white" : "bg-orange-600 text-white"}>
-                            {payment.status === 'completed' ? 'PAID' : 'PENDING'}
-                          </Badge>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="flex justify-between py-1">
-                            <span className="text-sm font-medium">Description:</span>
-                            <span className="text-sm">{payment.description || payment.feeType}</span>
+                      <AccordionItem key={payment.id} value={`payment-${payment.id}`} className="border rounded-lg bg-white shadow-sm overflow-hidden">
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="text-sm font-semibold">{payment.description || payment.feeType}</span>
+                              <span className="text-xs text-muted-foreground">#{payments.length - idx}</span>
+                            </div>
+                            <Badge className={payment.status === 'completed' ? "bg-green-600 text-white" : "bg-orange-600 text-white"}>
+                              {payment.status === 'completed' ? 'PAID' : 'PENDING'}
+                            </Badge>
                           </div>
-                          <div className="flex justify-between py-1">
-                            <span className="text-sm font-medium">Control Number:</span>
-                            <span className="text-sm font-bold tracking-wider">{payment.controlNumber}</span>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4 pt-2 border-t">
+                          <div className="space-y-3 mt-2">
+                            <div className="flex justify-between py-1">
+                              <span className="text-sm font-medium">Control Number:</span>
+                              <span className="text-sm font-bold tracking-wider">{payment.controlNumber}</span>
+                            </div>
+                            <div className="flex justify-between py-1 border-t pt-2 mt-2">
+                              <span className="text-sm text-muted-foreground">Billed Amount:</span>
+                              <span className="text-sm font-medium">{Number(payment.amount).toLocaleString()} TSH</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between py-1 border-t pt-2 mt-2">
-                            <span className="text-sm text-muted-foreground">Billed Amount:</span>
-                            <span className="text-sm font-medium">{Number(payment.amount).toLocaleString()} TSH</span>
-                          </div>
-                        </div>
-                      </div>
+                        </AccordionContent>
+                      </AccordionItem>
                     ))}
-                  </div>
+                  </Accordion>
                 )}
               </TabsContent>
 
@@ -350,28 +407,7 @@ export default function StudentDashboard() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card className="border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
-                {/* Quick actions content can be added here */}
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Permission Requests */}
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6 text-center">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-blue-50 flex items-center justify-center">
-                <Computer className="h-6 w-6 text-blue-500" />
-              </div>
-              <h4 className="font-medium text-sm mb-1">No Permission Requests</h4>
-              <p className="text-xs text-muted-foreground">You don't have any permission requests at the moment.</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

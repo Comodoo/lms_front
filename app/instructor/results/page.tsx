@@ -60,16 +60,13 @@ type ResultFormValues = z.infer<typeof resultSchema>;
 export default function InstructorResultsPage() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-  const { getExamResults, getCourseOfferings, getStudentProfiles, createExamResult, updateExamResult, deleteExamResult, submitExamResult, calculateGrade, loading } = useResults();
+  const { examResults, courseOfferings, studentProfiles, createExamResult, updateExamResult, deleteExamResult, submitExamResult, calculateGrade, loading } = useResults();
 
   useEffect(() => {
     setMounted(true);
   }, []);
   
-  const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [filteredResults, setFilteredResults] = useState<ExamResult[]>([]);
-  const [courseOfferings, setCourseOfferings] = useState<any[]>([]);
-  const [studentProfiles, setStudentProfiles] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
@@ -102,25 +99,7 @@ export default function InstructorResultsPage() {
   });
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    filterResults();
-  }, [examResults, searchTerm, statusFilter, courseFilter]);
-
-  const loadData = async () => {
-    const results = await getExamResults();
-    const courses = await getCourseOfferings();
-    const students = await getStudentProfiles();
-    setExamResults(results);
-    setFilteredResults(results);
-    setCourseOfferings(courses);
-    setStudentProfiles(students);
-  };
-
-  const filterResults = () => {
-    let filtered = examResults;
+    let filtered = examResults || [];
 
     if (searchTerm) {
       filtered = filtered.filter(
@@ -140,7 +119,7 @@ export default function InstructorResultsPage() {
     }
 
     setFilteredResults(filtered);
-  };
+  }, [examResults, searchTerm, statusFilter, courseFilter]);
 
   const onSubmit = async (data: ResultFormValues) => {
     if (isEditing && selectedResult) {
@@ -152,7 +131,6 @@ export default function InstructorResultsPage() {
     setIsEditing(false);
     setSelectedResult(null);
     form.reset();
-    loadData();
   };
 
   const handleEdit = (result: ExamResult) => {
@@ -257,20 +235,7 @@ export default function InstructorResultsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Exam Results Management</h1>
-          <p className="text-muted-foreground">Upload and manage student exam results</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push('/instructor/dashboard')}>
-            Back to Dashboard
-          </Button>
-          <Button variant="outline" onClick={() => setUploadDialogOpen(true)}>
-            <Upload className="w-4 h-4 mr-2" />
-            Bulk Upload
-          </Button>
-          <Button onClick={() => { setIsEditing(false); form.reset(); setDialogOpen(true); }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Result
-          </Button>
+          <p className="text-muted-foreground">Manage student exam results</p>
         </div>
       </div>
 
@@ -675,42 +640,7 @@ export default function InstructorResultsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Bulk Results Upload</DialogTitle>
-            <DialogDescription>
-              Upload a CSV or Excel file containing student results.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="border-2 border-dashed rounded-lg p-10 text-center flex flex-col items-center justify-center bg-muted/30">
-              <Upload className="w-10 h-10 mb-4 text-muted-foreground" />
-              <p className="text-sm font-medium mb-1">Click to upload or drag and drop</p>
-              <p className="text-xs text-muted-foreground">CSV, XLSX or XLS (max. 10MB)</p>
-              <Input type="file" className="hidden" id="bulk-upload" accept=".csv,.xlsx,.xls" />
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => document.getElementById('bulk-upload')?.click()}>
-                Select File
-              </Button>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 p-3 rounded-md text-xs text-blue-700">
-               <p className="font-bold mb-1">Template Instructions:</p>
-               <ul className="list-disc list-inside space-y-1">
-                 <li>Column A: Student Registration Number</li>
-                 <li>Column B: Course Code</li>
-                 <li>Column C: Score (0-100)</li>
-               </ul>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleBulkUpload} disabled={isUploading}>
-              {isUploading ? "Uploading..." : "Start Upload"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Upload Dialog removed */}
     </div>
   );
 }

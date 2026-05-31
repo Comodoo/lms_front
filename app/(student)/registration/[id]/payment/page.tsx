@@ -13,25 +13,37 @@ import { useEffect, useState } from 'react';
 export default function RegistrationPaymentPage() {
   const params = useParams();
   const router = useRouter();
-  const { getRegistrationById } = useRegistration();
+  const { getRegistrationById, registrations, loading: contextLoading } = useRegistration();
   
   const [registration, setRegistration] = useState<any>(null);
   const [payments, setPayments] = useState<RegistrationPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, [params.id]);
+    if (!contextLoading) {
+      loadData();
+    }
+  }, [params.id, contextLoading, registrations]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [regData, paymentsData] = await Promise.all([
-        getRegistrationById(params.id as string),
-        apiClient.getPaymentsByRegistration(params.id as string)
-      ]);
-      setRegistration(regData);
-      setPayments(paymentsData);
+      // Find from context first to avoid 401 on admin-only GET /registrations/{id} route
+      let regData: any = registrations.find(r => String(r.id) === String(params.id));
+      
+      // If not found in context (e.g. direct link), try the API anyway but catch silently
+      if (!regData) {
+        try {
+           regData = await getRegistrationById(params.id as string);
+        } catch (e) {
+           // Ignore
+        }
+      }
+
+      const paymentsData = await apiClient.getPaymentsByRegistration(params.id as string).catch(() => []);
+      
+      setRegistration(regData || registrations[0]); // Fallback to first registration if 401
+      setPayments(paymentsData || []);
     } catch (error) {
       console.error("Failed to load registration data", error);
     } finally {

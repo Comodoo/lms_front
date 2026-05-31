@@ -27,8 +27,8 @@ export default function FinancePage() {
       if (currentRegistration?.id) {
         setLoading(true);
         try {
-          const data = await apiClient.getPaymentsByRegistration(currentRegistration.id);
-          setPayments(data);
+          const data = await apiClient.getPaymentsByRegistration(currentRegistration.id).catch(() => []);
+          setPayments(data || []);
         } catch (error) {
           console.error("Failed to fetch payments", error);
         } finally {

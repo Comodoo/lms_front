@@ -80,6 +80,7 @@ interface Course {
   department_name?: string;
   program_id?: string;
   program_name?: string;
+  semester?: string;
   status: 'active' | 'inactive';
   created_by?: string;
   created_at: string;
@@ -146,9 +147,9 @@ export default function AdminCoursesPage() {
   // Form states
   const [creditForm, setCreditForm] = useState({ code: '', name: '', value: 1.0, description: '', is_active: true });
   const [deptForm, setDeptForm] = useState({ code: '', name: '', head_of_department: '', description: '', is_active: true });
-  const [courseForm, setCourseForm] = useState({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', program_id: '', status: 'active' });
+  const [courseForm, setCourseForm] = useState({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', program_id: '', semester: '', status: 'active' });
   
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Pagination state
   const [coursePage, setCoursePage] = useState(1);
@@ -416,7 +417,7 @@ export default function AdminCoursesPage() {
       } else {
         Swal.fire('Saved!', 'The course has been created.', 'success');
         setIsCreateDialogOpen(false);
-        setCourseForm({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', status: 'active' });
+        setCourseForm({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', program_id: '', semester: '', status: 'active' });
         await loadCourses();
       }
     }
@@ -574,7 +575,7 @@ export default function AdminCoursesPage() {
         Swal.fire('Updated!', 'The course has been updated.', 'success');
         setIsEditDialogOpen(false);
         setSelectedCourse(null);
-        setCourseForm({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', status: 'active' });
+        setCourseForm({ code: '', name: '', description: '', instructor_id: '', credit_id: '', department_id: '', program_id: '', semester: '', status: 'active' });
         loadCourses();
       }
     }
@@ -608,18 +609,18 @@ export default function AdminCoursesPage() {
     );
   };
 
-  if (!isAuthenticated) {
+  if (authLoading || loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <p className="text-muted-foreground">Please log in to access courses.</p>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  if (loading) {
+  if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <p className="text-muted-foreground">Please log in to access courses.</p>
       </div>
     );
   }
@@ -796,6 +797,7 @@ export default function AdminCoursesPage() {
                                 credit_id: course.credit_id || '',
                                 department_id: course.department_id || '',
                                 program_id: course.program_id || '',
+                                semester: course.semester || '',
                                 status: course.status
                               });
                               setIsEditDialogOpen(true);
@@ -1075,6 +1077,52 @@ export default function AdminCoursesPage() {
             <div id="create-course-desc" className="sr-only">Form to create a new course.</div>
           </DialogHeader>
           <div className="space-y-4 py-4" aria-describedby="create-course-desc">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Department</label>
+                <Select value={courseForm.department_id} onValueChange={(value) => setCourseForm({ ...courseForm, department_id: value, program_id: '' })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id} className="text-xs">
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Program</label>
+                <Select disabled={!courseForm.department_id} value={courseForm.program_id} onValueChange={(value) => setCourseForm({ ...courseForm, program_id: value })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {programs.filter(p => p.department_id === courseForm.department_id).map((prog) => (
+                      <SelectItem key={prog.id} value={prog.id} className="text-xs">
+                        {prog.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Semester</label>
+                <Select value={courseForm.semester} onValueChange={(value) => setCourseForm({ ...courseForm, semester: value })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1" className="text-xs">Semester One</SelectItem>
+                    <SelectItem value="2" className="text-xs">Semester Two</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <label className="text-[11px] font-medium uppercase text-muted-foreground">Course Code</label>
                 <Input 
@@ -1084,6 +1132,8 @@ export default function AdminCoursesPage() {
                   className="h-8 text-xs"
                 />
               </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-[11px] font-medium uppercase text-muted-foreground">Course Name</label>
               <Input 
@@ -1103,48 +1153,16 @@ export default function AdminCoursesPage() {
                 className="text-xs"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium uppercase text-muted-foreground">Credit</label>
-                <Select value={courseForm.credit_id} onValueChange={(value) => setCourseForm({ ...courseForm, credit_id: value })}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select credit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {credits.map((credit) => (
-                      <SelectItem key={credit.id} value={credit.id} className="text-xs">
-                        {credit.name} ({credit.value})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium uppercase text-muted-foreground">Department</label>
-                <Select value={courseForm.department_id} onValueChange={(value) => setCourseForm({ ...courseForm, department_id: value, program_id: '' })}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id} className="text-xs">
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
             <div className="space-y-2">
-              <label className="text-[11px] font-medium uppercase text-muted-foreground">Program</label>
-              <Select disabled={!courseForm.department_id} value={courseForm.program_id} onValueChange={(value) => setCourseForm({ ...courseForm, program_id: value })}>
+              <label className="text-[11px] font-medium uppercase text-muted-foreground">Credit</label>
+              <Select value={courseForm.credit_id} onValueChange={(value) => setCourseForm({ ...courseForm, credit_id: value })}>
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select program" />
+                  <SelectValue placeholder="Select credit" />
                 </SelectTrigger>
                 <SelectContent>
-                  {programs.filter(p => p.department_id === courseForm.department_id).map((prog) => (
-                    <SelectItem key={prog.id} value={prog.id} className="text-xs">
-                      {prog.name}
+                  {credits.map((credit) => (
+                    <SelectItem key={credit.id} value={credit.id} className="text-xs">
+                      {credit.name} ({credit.value})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1170,6 +1188,51 @@ export default function AdminCoursesPage() {
           <div className="space-y-4 py-4" aria-describedby="edit-course-desc">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Department</label>
+                <Select value={courseForm.department_id} onValueChange={(value) => setCourseForm({ ...courseForm, department_id: value, program_id: '' })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id} className="text-xs">
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Program</label>
+                <Select disabled={!courseForm.department_id} value={courseForm.program_id} onValueChange={(value) => setCourseForm({ ...courseForm, program_id: value })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {programs.filter(p => p.department_id === courseForm.department_id).map((prog) => (
+                      <SelectItem key={prog.id} value={prog.id} className="text-xs">
+                        {prog.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Semester</label>
+                <Select value={courseForm.semester} onValueChange={(value) => setCourseForm({ ...courseForm, semester: value })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1" className="text-xs">Semester One</SelectItem>
+                    <SelectItem value="2" className="text-xs">Semester Two</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <label className="text-[11px] font-medium uppercase text-muted-foreground">Course Code</label>
                 <Input 
                   value={courseForm.code}
@@ -1177,22 +1240,8 @@ export default function AdminCoursesPage() {
                   className="h-8 text-xs"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-medium uppercase text-muted-foreground">Assign Instructor</label>
-                <Select value={courseForm.instructor_id} onValueChange={(value) => setCourseForm({ ...courseForm, instructor_id: value })}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select instructor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instructors.map((instructor) => (
-                      <SelectItem key={instructor.id} value={instructor.id} className="text-xs">
-                        {instructor.first_name} {instructor.last_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
+
             <div className="space-y-2">
               <label className="text-[11px] font-medium uppercase text-muted-foreground">Course Name</label>
               <Input 
@@ -1201,6 +1250,7 @@ export default function AdminCoursesPage() {
                 className="h-8 text-xs"
               />
             </div>
+            
             <div className="space-y-2">
               <label className="text-[11px] font-medium uppercase text-muted-foreground">Description</label>
               <Textarea 
@@ -1210,6 +1260,7 @@ export default function AdminCoursesPage() {
                 className="text-xs"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[11px] font-medium uppercase text-muted-foreground">Credit</label>
@@ -1227,35 +1278,20 @@ export default function AdminCoursesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-[11px] font-medium uppercase text-muted-foreground">Department</label>
-                <Select value={courseForm.department_id} onValueChange={(value) => setCourseForm({ ...courseForm, department_id: value, program_id: '' })}>
+                <label className="text-[11px] font-medium uppercase text-muted-foreground">Assign Instructor</label>
+                <Select value={courseForm.instructor_id} onValueChange={(value) => setCourseForm({ ...courseForm, instructor_id: value })}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select department" />
+                    <SelectValue placeholder="Select instructor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id} className="text-xs">
-                        {dept.name}
+                    {instructors.map((instructor) => (
+                      <SelectItem key={instructor.id} value={instructor.id} className="text-xs">
+                        {instructor.first_name} {instructor.last_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-medium uppercase text-muted-foreground">Program</label>
-              <Select disabled={!courseForm.department_id} value={courseForm.program_id} onValueChange={(value) => setCourseForm({ ...courseForm, program_id: value })}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select program" />
-                </SelectTrigger>
-                <SelectContent>
-                  {programs.filter(p => p.department_id === courseForm.department_id).map((prog) => (
-                    <SelectItem key={prog.id} value={prog.id} className="text-xs">
-                      {prog.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <DialogFooter className="p-4 pt-0">

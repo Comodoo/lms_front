@@ -67,10 +67,11 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
   const loadPrograms = async () => {
     try {
       const data = await apiClient.getPrograms();
-      setPrograms(data);
+      setPrograms(data as Program[]);
     } catch (error: any) {
-      // Don't log auth errors as they're expected when not logged in
-      if (error?.message?.includes('Unauthenticated')) {
+      if (error?.message?.includes('Unauthenticated')) return;
+      if (error?.message?.includes('Network Error')) {
+        console.warn('Backend offline: Failed to load programs');
         return;
       }
       console.error('Failed to load programs:', error);
@@ -80,10 +81,11 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
   const loadDepartments = async () => {
     try {
       const data = await apiClient.getDepartments();
-      setDepartments(data);
+      setDepartments(data as Department[]);
     } catch (error: any) {
-      // Don't log auth errors as they're expected when not logged in
-      if (error?.message?.includes('Unauthenticated')) {
+      if (error?.message?.includes('Unauthenticated')) return;
+      if (error?.message?.includes('Network Error')) {
+        console.warn('Backend offline: Failed to load departments');
         return;
       }
       console.error('Failed to load departments:', error);
@@ -96,8 +98,12 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
       const data = await apiClient.getRegistrations();
       setRegistrations(data);
     } catch (error: any) {
-      // Don't log auth errors as they're expected when not logged in
       if (error?.message?.includes('Unauthenticated')) {
+        setRegistrations([]);
+        return;
+      }
+      if (error?.message?.includes('Network Error')) {
+        console.warn('Backend offline: Failed to load registrations');
         setRegistrations([]);
         return;
       }
@@ -130,7 +136,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
       formData.append('study_mode', data.studyMode);
       formData.append('guardian_name', data.guardianName);
       formData.append('guardian_phone', data.guardianPhone);
-      formData.append('guardian_email', data.guardianEmail);
+      if (data.guardianEmail) formData.append('guardian_email', data.guardianEmail);
       formData.append('guardian_relationship', data.guardianRelationship);
       formData.append('guardian_address', data.guardianAddress);
 
@@ -165,7 +171,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
         throw new Error(response.error);
       }
 
-      const registration = response.data?.registration || response.data;
+      const registration = (response.data as any)?.registration || (response.data as any);
       setRegistrations(prev => [registration, ...prev]);
       return registration;
     } finally {
@@ -187,8 +193,10 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     setLoading(true);
     try {
       return await apiClient.getRegistration(id);
-    } catch (error) {
-      console.error('Failed to get registration:', error);
+    } catch (error: any) {
+      if (!error?.message?.includes('Unauthorized') && !error?.message?.includes('status: 401')) {
+        console.error('Failed to get registration:', error);
+      }
       return null;
     } finally {
       setLoading(false);
@@ -238,7 +246,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
         method: method,
         phone_number: phoneNumber
       });
-      return payment;
+      return payment as RegistrationPayment;
     } finally {
       setLoading(false);
     }

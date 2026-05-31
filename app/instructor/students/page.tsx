@@ -1,11 +1,27 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useLMS } from '@/lib/lms-context';
+import { apiClient } from '@/lib/api-client';
+import { coursesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useResults } from '@/lib/results-context';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -59,10 +75,32 @@ import {
   Filter,
   Download,
   Mail,
+  Plus,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { StudentEnrollmentInfo, EnrollmentStatus } from '@/lib/types';
+
+const resultSchema = z.object({
+  studentProfileId: z.string().min(1),
+  registrationNumber: z.string().min(1),
+  studentName: z.string().min(1),
+  academicYear: z.string().min(1),
+  semester: z.enum(['first', 'second', 'summer']),
+  courseOfferingId: z.string().min(1),
+  courseCode: z.string().min(1),
+  courseName: z.string().min(1),
+  credits: z.number().min(1),
+  cat1Score: z.number().min(0).max(100).optional(),
+  cat2Score: z.number().min(0).max(100).optional(),
+  assignmentScore: z.number().min(0).max(100).optional(),
+  finalExamScore: z.number().min(0).max(100),
+  instructorId: z.string().min(1),
+  instructorName: z.string().min(1),
+});
+
+type ResultFormValues = z.infer<typeof resultSchema>;
 
 function getStatusIcon(status: EnrollmentStatus) {
   switch (status) {
@@ -242,23 +280,165 @@ function StudentDetailSheet({
   );
 }
 
-export default function StudentsPage() {
-  const { currentUser, getInstructorStudents, removeStudentFromCourse, getInstructorCourses } = useLMS();
+const generateRegistrationNumber = (id: string | number) => {
+  const paddedId = id.toString().padStart(4, '0');
+  return `ZMS-26-01-${paddedId}`;
+};
+
+function StudentsContent() {
+  const searchParams = useSearchParams();
+  const initialCourseId = searchParams.get('course_id') || 'all';
+  
+  const { currentUser, removeStudentFromCourse } = useLMS();
+  const { getCourseOfferings, getStudentProfiles, createExamResult, loading: resultsLoading } = useResults();
+  
   const instructorId = currentUser?.id || '';
-  const students = getInstructorStudents(instructorId);
-  const courses = getInstructorCourses(instructorId);
+
+  const [realStudents, setRealStudents] = useState<StudentEnrollmentInfo[]>([]);
+  const [realCourses, setRealCourses] = useState<any[]>([]);
+  const [rawRegistrations, setRawRegistrations] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [courseFilter, setCourseFilter] = useState<string>(initialCourseId);
   const [statusFilter, setStatusFilter] = useState<EnrollmentStatus | 'all'>('all');
   const [progressFilter, setProgressFilter] = useState<string>('all');
   const [selectedStudent, setSelectedStudent] = useState<StudentEnrollmentInfo | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState(false);
+  
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [courseOfferings, setCourseOfferings] = useState<any[]>([]);
+  const [studentProfiles, setStudentProfiles] = useState<any[]>([]);
+
+  const form = useForm<ResultFormValues>({
+    resolver: zodResolver(resultSchema),
+    defaultValues: {
+      studentProfileId: '',
+      registrationNumber: '',
+      studentName: '',
+      academicYear: '2025/2026',
+      semester: 'first',
+      courseOfferingId: '',
+      courseCode: '',
+      courseName: '',
+      credits: 3,
+      cat1Score: 0,
+      cat2Score: 0,
+      assignmentScore: 0,
+      finalExamScore: 0,
+      instructorId: currentUser?.id || 'instructor-1',
+      instructorName: currentUser?.name || 'Dr. John Doe',
+    },
+  });
+
+  // Load results info
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoadingData(true);
+      try {
+        const [registrations, coursesRes, offerings, profiles] = await Promise.all([
+          apiClient.getRegistrations().catch(() => []),
+          coursesApi.getAll().catch(() => ({ data: [] })),
+          getCourseOfferings(),
+          getStudentProfiles()
+        ]);
+
+        const allCourses = Array.isArray(coursesRes.data) ? coursesRes.data : [];
+        setRealCourses(allCourses);
+
+        const mappedStudents: StudentEnrollmentInfo[] = [];
+        
+        registrations.forEach((reg: any) => {
+          // Find courses that match this student's program
+          const programCourses = allCourses.filter(c => String(c.program_id) === String(reg.programId));
+          
+          programCourses.forEach(course => {
+            mappedStudents.push({
+              userId: reg.id.toString(),
+              userName: `${reg.firstName} ${reg.lastName}`,
+              userEmail: reg.email || reg.guardianEmail || 'no-email@example.com',
+              courseId: course.id.toString(),
+              courseTitle: course.name || course.code,
+              enrolledAt: new Date(reg.approvedAt || reg.submittedAt || new Date()),
+              progress: 0,
+              status: 'active',
+              completedLessons: 0,
+              totalLessons: 10, // Placeholder
+              lastActivity: new Date(),
+            });
+          });
+        });
+
+        setRealStudents(mappedStudents);
+        setRawRegistrations(registrations);
+        setCourseOfferings(offerings);
+        setStudentProfiles(profiles);
+      } catch (error) {
+        console.error('Failed to load student data:', error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onSubmitResult = async (data: ResultFormValues) => {
+    await createExamResult(data);
+    setDialogOpen(false);
+    form.reset();
+  };
+
+  const handleBulkUpload = async () => {
+    setIsUploading(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setIsUploading(false);
+    setUploadDialogOpen(false);
+  };
+
+  const handleCourseChange = (courseId: string) => {
+    const course = realCourses.find(c => c.id.toString() === courseId);
+    if (course) {
+      form.setValue('courseCode', course.code || '');
+      form.setValue('courseName', course.name || '');
+      form.setValue('credits', Number(course.credit?.value || course.credits || 3));
+      // Reset student selection when course changes
+      form.setValue('studentProfileId', '');
+      form.setValue('registrationNumber', '');
+      form.setValue('studentName', '');
+    }
+  };
+
+  const handleStudentChange = (studentUserId: string) => {
+    const student = rawRegistrations.find(s => (s.user_id ? s.user_id.toString() : s.id.toString()) === studentUserId);
+    if (student) {
+      form.setValue('registrationNumber', student.registrationNumber || generateRegistrationNumber(student.id));
+      form.setValue('studentName', `${student.firstName} ${student.lastName}`);
+      form.setValue('academicYear', student.currentAcademicYear || '2025/2026');
+      form.setValue('semester', student.currentSemester || 'first');
+      
+      const courseId = form.getValues('courseOfferingId');
+      const course = realCourses.find(c => c.id.toString() === courseId);
+      if (course) {
+        form.setValue('credits', Number(course.credit?.value || course.credits || 3));
+      }
+    }
+  };
+
+  const selectedCourseId = form.watch('courseOfferingId');
+  const availableStudents = useMemo(() => {
+    if (!selectedCourseId) return [];
+    const course = realCourses.find(c => c.id.toString() === selectedCourseId);
+    if (!course) return [];
+    return rawRegistrations.filter(reg => String(reg.programId) === String(course.program_id));
+  }, [selectedCourseId, realCourses, rawRegistrations]);
 
   const filtered = useMemo(() => {
-    return students.filter((s) => {
+    return realStudents.filter((s) => {
       const matchesSearch =
         s.userName.toLowerCase().includes(search.toLowerCase()) ||
         s.userEmail.toLowerCase().includes(search.toLowerCase()) ||
@@ -272,18 +452,18 @@ export default function StudentsPage() {
         (progressFilter === 'completed' && s.progress === 100);
       return matchesSearch && matchesCourse && matchesStatus && matchesProgress;
     });
-  }, [students, search, courseFilter, statusFilter, progressFilter]);
+  }, [realStudents, search, courseFilter, statusFilter, progressFilter]);
 
   const stats = useMemo(() => {
-    const unique = new Set(students.map((s) => s.userId));
-    const active = students.filter((s) => s.status === 'active').length;
-    const completed = students.filter((s) => s.status === 'completed').length;
+    const unique = new Set(realStudents.map((s) => s.userId));
+    const active = realStudents.filter((s) => s.status === 'active').length;
+    const completed = realStudents.filter((s) => s.status === 'completed').length;
     const avgProgress =
-      students.length > 0
-        ? Math.round(students.reduce((acc, s) => acc + s.progress, 0) / students.length)
+      realStudents.length > 0
+        ? Math.round(realStudents.reduce((acc, s) => acc + s.progress, 0) / realStudents.length)
         : 0;
     return { total: unique.size, active, completed, avgProgress };
-  }, [students]);
+  }, [realStudents]);
 
   const toggleBulkSelect = (key: string) => {
     setBulkSelected((prev) => {
@@ -344,10 +524,20 @@ export default function StudentsPage() {
             Manage and track all enrolled students across your courses
           </p>
         </div>
-        <Button variant="outline" onClick={exportCsv} className="gap-2 self-start">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex flex-wrap gap-2 self-start">
+          <Button variant="outline" onClick={exportCsv} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setUploadDialogOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" />
+            Bulk Upload
+          </Button>
+          <Button onClick={() => { form.reset(); setDialogOpen(true); }} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Result
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -417,11 +607,14 @@ export default function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Courses</SelectItem>
-                  {courses.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.title.length > 28 ? c.title.slice(0, 28) + '...' : c.title}
-                    </SelectItem>
-                  ))}
+                  {realCourses.map((c) => {
+                    const title = c.name || c.code || '';
+                    return (
+                      <SelectItem key={c.id} value={c.id.toString()}>
+                        {title.length > 28 ? title.slice(0, 28) + '...' : title}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
 
@@ -490,7 +683,7 @@ export default function StudentsPage() {
               <Users className="h-12 w-12 text-muted-foreground" />
               <h3 className="mt-4 text-lg font-semibold">No students found</h3>
               <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                {students.length === 0
+                {realStudents.length === 0
                   ? 'No students have enrolled in your courses yet.'
                   : 'Try adjusting your search or filters.'}
               </p>
@@ -663,6 +856,258 @@ export default function StudentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Result Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="w-full max-w-[80vw] h-[85vh] overflow-y-auto p-10">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-3xl">Add New Result</DialogTitle>
+            <DialogDescription className="text-lg mt-2">
+              Enter exam result details for a student
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmitResult)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="courseOfferingId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Course</FormLabel>
+                    <Select onValueChange={(value) => { field.onChange(value); handleCourseChange(value); }} value={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select course first" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {realCourses.map((course) => (
+                          <SelectItem key={course.id.toString()} value={course.id.toString()}>
+                            {course.code} - {course.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="studentProfileId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Student</FormLabel>
+                      <Select 
+                        onValueChange={(value) => { field.onChange(value); handleStudentChange(value); }} 
+                        value={field.value || undefined}
+                        disabled={!selectedCourseId}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={selectedCourseId ? "Select student" : "Select a course first"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {availableStudents.map((student) => (
+                            <SelectItem key={student.id.toString()} value={student.user_id ? student.user_id.toString() : student.id.toString()}>
+                              {student.firstName} {student.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="registrationNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Registration Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
+                <FormField
+                  control={form.control}
+                  name="academicYear"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Academic Year</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "2025/2026"} disabled>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="2025/2026">2025/2026</SelectItem>
+                          <SelectItem value="2024/2025">2024/2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="semester"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Semester</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "first"} disabled>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="first">Semester One</SelectItem>
+                          <SelectItem value="second">Semester Two</SelectItem>
+                          <SelectItem value="summer">Summer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="credits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Credits</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-4 gap-6">
+                <FormField
+                  control={form.control}
+                  name="cat1Score"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>CAT 1 (Optional)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cat2Score"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>CAT 2 (Optional)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="assignmentScore"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assignment (Optional)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="finalExamScore"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Final Exam *</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={resultsLoading}>
+                  Add Result
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Results Upload</DialogTitle>
+            <DialogDescription>
+              Upload a CSV or Excel file containing student results.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="border-2 border-dashed rounded-lg p-10 text-center flex flex-col items-center justify-center bg-muted/30">
+              <Upload className="w-10 h-10 mb-4 text-muted-foreground" />
+              <p className="text-sm font-medium mb-1">Click to upload or drag and drop</p>
+              <p className="text-xs text-muted-foreground">CSV, XLSX or XLS (max. 10MB)</p>
+              <Input type="file" className="hidden" id="bulk-upload" accept=".csv,.xlsx,.xls" />
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => document.getElementById('bulk-upload')?.click()}>
+                Select File
+              </Button>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 p-3 rounded-md text-xs text-blue-700">
+               <p className="font-bold mb-1">Template Instructions:</p>
+               <ul className="list-disc list-inside space-y-1">
+                 <li>Column A: Student Registration Number</li>
+                 <li>Column B: Course Code</li>
+                 <li>Column C: Score (0-100)</li>
+               </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBulkUpload} disabled={isUploading}>
+              {isUploading ? "Uploading..." : "Start Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+      <StudentsContent />
+    </Suspense>
   );
 }

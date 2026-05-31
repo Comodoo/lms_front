@@ -29,7 +29,7 @@ import { useAuth } from '@/lib/auth-context';
 export default function AdminStudentsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { getStudentProfiles, deleteStudentProfile, loading } = useResults();
+  const { getStudentProfiles, deleteStudentProfile, loading, examResults } = useResults();
   const [mounted, setMounted] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,8 +41,39 @@ export default function AdminStudentsPage() {
 
   const loadData = async () => {
     const data = await getStudentProfiles();
-    setStudents(data);
+    
+    // Calculate CGPA for each student based on exam results
+    const enrichedData = data.map(student => {
+      const studentResults = examResults.filter(r => 
+        String(r.studentProfileId) === String(student.id) || 
+        String(r.registrationNumber) === String(student.registrationNumber)
+      );
+
+      let totalCredits = 0;
+      let totalPoints = 0;
+
+      studentResults.forEach(r => {
+        const credit = Number(r.credits) || 0;
+        const gpaPoints = Number(r.gradePoints) || 0;
+        totalCredits += credit;
+        totalPoints += (gpaPoints * credit);
+      });
+
+      return {
+        ...student,
+        cgpa: totalCredits > 0 ? (totalPoints / totalCredits) : 0
+      };
+    });
+    
+    setStudents(enrichedData);
   };
+
+  // Re-calculate when examResults change
+  useEffect(() => {
+    if (students.length > 0) {
+      loadData();
+    }
+  }, [examResults]);
 
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this student?")) {

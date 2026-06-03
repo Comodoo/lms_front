@@ -5,30 +5,46 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import { paymentsApi } from '@/lib/api';
 import {
-    CheckCircle,
-    CreditCard,
-    Download,
-    Eye,
-    Filter,
-    Search,
-    XCircle,
-    Loader2,
+  CheckCircle,
+  CreditCard,
+  Download,
+  Eye,
+  Filter,
+  Search,
+  XCircle,
+  Loader2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface Payment {
   id: string;
   student_id?: string;
   registration_id?: string;
   student_name?: string;
+  calculated_name?: string;
+  registration?: {
+    first_name?: string;
+    last_name?: string;
+  };
+  student?: {
+    name?: string;
+  };
   fee_type: string;
   amount: number;
   method: string;
@@ -46,6 +62,7 @@ export default function AccountantPaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   useEffect(() => {
     loadPayments();
@@ -72,16 +89,69 @@ export default function AccountantPaymentsPage() {
     }
   };
 
-  const filteredPayments = payments.filter((payment) => {
-    const matchesSearch = 
-      payment.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(payment.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.control_number?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+  const filteredPayments = payments.map(payment => {
+    // Determine student name from nested relations if not present directly
+    let name = payment.student_name;
+    if (!name && payment.registration) {
+      name = `${payment.registration.first_name || ''} ${payment.registration.last_name || ''}`.trim();
+    }
+    if (!name && payment.student) {
+      name = payment.student.name;
+    }
+
+    return { ...payment, calculated_name: name || 'N/A' };
+  }).filter((payment) => {
+    const searchString = searchTerm.toLowerCase();
+    const matchesSearch =
+      payment.calculated_name.toLowerCase().includes(searchString) ||
+      String(payment.id).toLowerCase().includes(searchString) ||
+      payment.control_number?.toLowerCase().includes(searchString);
+
     const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
+
+  const exportToExcel = () => {
+    // Prepare the data mapping
+    const data = filteredPayments.map(payment => ({
+      'Payment ID': payment.id,
+      'Control Number': payment.control_number || '',
+      'Initiated Date': payment.created_at ? new Date(payment.created_at).toLocaleString() : '',
+      'Paid Date': payment.paid_at ? new Date(payment.paid_at).toLocaleString() : '',
+      'Student Name': payment.calculated_name || 'N/A',
+      'Student ID': payment.student_id || '',
+      'Fee Type': payment.fee_type,
+      'Amount (TSH)': payment.amount,
+      'Method': payment.method,
+      'Status': payment.status
+    }));
+
+    // Create the worksheet
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    // Set column widths to prevent "###" and make it readable
+    const wscols = [
+      { wch: 15 }, // Payment ID
+      { wch: 20 }, // Control Number
+      { wch: 22 }, // Initiated Date
+      { wch: 22 }, // Paid Date
+      { wch: 30 }, // Student Name
+      { wch: 12 }, // Student ID
+      { wch: 20 }, // Fee Type
+      { wch: 15 }, // Amount (TSH)
+      { wch: 15 }, // Method
+      { wch: 12 }, // Status
+    ];
+    worksheet['!cols'] = wscols;
+
+    // Create workbook and append worksheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Payments');
+
+    // Trigger download of the xlsx file
+    XLSX.writeFile(workbook, `payments_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -141,7 +211,7 @@ export default function AccountantPaymentsPage() {
           <h1 className="text-2xl font-bold">Payment Management</h1>
           <p className="text-muted-foreground">View and manage all student payments</p>
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" onClick={exportToExcel}>
           <Download className="h-4 w-4" />
           Export Report
         </Button>
@@ -248,8 +318,8 @@ export default function AccountantPaymentsPage() {
                       {payment.control_number && <div className="text-xs text-muted-foreground">{payment.control_number}</div>}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-medium">{payment.student_name || 'N/A'}</div>
-                      {payment.student_id && <div className="text-xs text-muted-foreground">{payment.student_id}</div>}
+                      <div className="font-medium">{payment.calculated_name}</div>
+                      {payment.student_id && <div className="text-xs text-muted-foreground">ID: {payment.student_id}</div>}
                     </td>
                     <td className="py-3 px-4">{payment.fee_type}</td>
                     <td className="py-3 px-4 font-medium">TSH {payment.amount.toLocaleString()}</td>
@@ -258,13 +328,18 @@ export default function AccountantPaymentsPage() {
                     <td className="py-3 px-4 text-muted-foreground">{new Date(payment.created_at).toLocaleDateString()}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setSelectedPayment(payment)}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
                         {payment.status === 'pending' && payment.method === 'cash' && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
                             onClick={() => handleVerifyPayment(payment.id)}
                           >
@@ -287,6 +362,73 @@ export default function AccountantPaymentsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Payment Details Dialog */}
+      <Dialog open={!!selectedPayment} onOpenChange={(open) => !open && setSelectedPayment(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+            <DialogDescription>
+              View complete details for this payment record.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPayment && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Payment ID</p>
+                  <p className="font-medium">{selectedPayment.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Date</p>
+                  <p className="font-medium">{new Date(selectedPayment.created_at).toLocaleString()}</p>
+                </div>
+
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground">Student</p>
+                  <p className="font-medium">{selectedPayment.calculated_name}</p>
+                  {selectedPayment.student_id && (
+                    <p className="text-sm text-muted-foreground">ID: {selectedPayment.student_id}</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Amount</p>
+                  <p className="font-medium text-lg text-primary">TSH {selectedPayment.amount.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <div className="mt-1">{getStatusBadge(selectedPayment.status)}</div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Fee Type</p>
+                  <p className="font-medium capitalize">{selectedPayment.fee_type.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Method</p>
+                  <div className="mt-1">{getMethodIcon(selectedPayment.method)}</div>
+                </div>
+
+                {selectedPayment.control_number && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Control Number</p>
+                    <p className="font-mono bg-muted p-2 rounded-md mt-1">{selectedPayment.control_number}</p>
+                  </div>
+                )}
+
+                {selectedPayment.notes && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Notes</p>
+                    <p className="text-sm bg-muted/50 p-2 rounded-md mt-1">{selectedPayment.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

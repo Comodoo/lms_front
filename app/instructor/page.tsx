@@ -44,8 +44,21 @@ export default function InstructorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const pendingResults = examResults.filter(r => r.status === 'submitted').length;
-  const approvedResults = examResults.filter(r => r.status === 'approved').length;
+  const pendingResults = examResults.filter(r => r.status === 'draft').length;
+  const approvedResults = examResults.filter(r => r.status === 'published').length;
+
+  // Calculate average grade
+  const totalPoints = examResults.reduce((sum, r) => sum + (r.gradePoints || 0), 0);
+  const avgGpa = examResults.length > 0 ? totalPoints / examResults.length : 0;
+  let averageGradeLetter = 'N/A';
+  if (avgGpa > 0) {
+    if (avgGpa >= 4.5) averageGradeLetter = 'A';
+    else if (avgGpa >= 3.5) averageGradeLetter = 'B+';
+    else if (avgGpa >= 2.5) averageGradeLetter = 'B';
+    else if (avgGpa >= 1.5) averageGradeLetter = 'C';
+    else if (avgGpa >= 0.5) averageGradeLetter = 'D';
+    else averageGradeLetter = 'E';
+  }
 
   useEffect(() => {
     loadDashboardData();
@@ -94,7 +107,7 @@ export default function InstructorDashboard() {
     {
       title: 'Total Results',
       value: examResults.length.toString(),
-      description: `${approvedResults} approved`,
+      description: `${approvedResults} published`,
       icon: FileText,
       color: 'text-green-600',
       bg: 'bg-green-100',
@@ -102,14 +115,14 @@ export default function InstructorDashboard() {
     {
       title: 'Pending Approval',
       value: pendingResults.toString(),
-      description: 'Awaiting review',
+      description: 'Draft results',
       icon: TrendingUp,
       color: 'text-amber-600',
       bg: 'bg-amber-100',
     },
     {
       title: 'Average Grade',
-      value: 'B+',
+      value: averageGradeLetter,
       description: 'Overall performance',
       icon: Star,
       color: 'text-rose-600',

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiClient } from './api-client';
+import { registrationsApi } from './api';
 import type {
   ExamResult,
   SemesterResult,
@@ -68,58 +69,27 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadCourseOfferings = async () => {
-    // Mock data - replace with API call
-    const mockCourseOfferings: CourseOffering[] = [
-      {
-        id: 'course-1',
-        code: 'CP 412',
-        name: 'C# Programming',
-        departmentId: 'dept-1',
-        department: 'School of Computing',
-        credits: 9,
-        description: 'Advanced C# Programming',
+    try {
+      const response: any = await apiClient.getCourses();
+      const rawData = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+      
+      const realCourseOfferings: CourseOffering[] = rawData.map((course: any) => ({
+        id: course.id.toString(),
+        code: course.code || '',
+        name: course.name || '',
+        departmentId: course.department_id?.toString() || '',
+        department: course.department?.name || 'N/A',
+        credits: course.credits || 3,
+        description: course.description || '',
         prerequisiteCourseIds: [],
-        isActive: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 'course-2',
-        code: 'CT 312',
-        name: 'Computer Maintenance',
-        departmentId: 'dept-1',
-        department: 'School of Computing',
-        credits: 9,
-        description: 'Computer Maintenance and Repair',
-        prerequisiteCourseIds: ['course-1'],
-        isActive: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 'course-3',
-        code: 'CS 201',
-        name: 'Data Structures',
-        departmentId: 'dept-1',
-        department: 'School of Computing',
-        credits: 8,
-        description: 'Advanced data structures and algorithms',
-        prerequisiteCourseIds: ['course-2'],
-        isActive: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 'course-4',
-        code: 'MT 101',
-        name: 'Calculus I',
-        departmentId: 'dept-1',
-        department: 'School of Computing',
-        credits: 7,
-        description: 'Introduction to calculus',
-        prerequisiteCourseIds: [],
-        isActive: true,
-        createdAt: new Date(),
-      },
-    ];
-    setCourseOfferings(mockCourseOfferings);
+        isActive: course.status === 'active' || course.is_active || true,
+        createdAt: new Date(course.created_at || Date.now()),
+      }));
+      setCourseOfferings(realCourseOfferings);
+    } catch (error) {
+      console.error('Failed to load courses', error);
+      setCourseOfferings([]);
+    }
   };
 
   const loadStudentProfiles = async () => {
@@ -178,7 +148,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         studentName: r.student ? `${r.student.first_name || ''} ${r.student.last_name || ''}`.trim() : (r.student_name || 'Unknown Student'),
         academicYear: r.course_offering?.academic_year || r.academic_year || '2024/2025',
         semester: r.course_offering?.semester || r.semester || 'first',
-        courseOfferingId: r.course_offering_id?.toString() || '',
+        courseOfferingId: r.course_offering?.course_id?.toString() || r.course_offering_id?.toString() || '',
         courseCode: r.course_offering?.course?.code || r.course_offering?.code || r.course_code || 'N/A',
         courseName: r.course_offering?.course?.name || r.course_offering?.name || r.course_name || 'Unknown Course',
         credits: r.course_offering?.course?.credits || r.course_offering?.credits || r.credits || 3,
@@ -313,10 +283,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
   const deleteExamResult = async (id: string): Promise<void> => {
     setLoading(true);
     try {
-      // Assuming apiClient has a generic delete or deleteExamResult, if not we fall back to local state deletion
-      // If apiClient.deleteExamResult doesn't exist, we will use standard apiRequest
-      const { apiRequest } = require('./api-client');
-      await apiRequest(`/exam-results/${id}`, { method: 'DELETE' }).catch(() => {});
+      await apiClient.deleteExamResult(id);
       await loadExamResults();
     } catch (error) {
       console.error("Failed to delete exam result", error);
@@ -463,9 +430,14 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
 
   const deleteStudentProfile = async (id: string): Promise<void> => {
     setLoading(true);
-    // In a real scenario, this would call the API
-    setStudentProfiles(prev => prev.filter(p => p.id !== id));
-    setLoading(false);
+    try {
+      await registrationsApi.delete(id);
+      setStudentProfiles(prev => prev.filter(p => p.id !== id));
+    } catch (e) {
+      console.error('Failed to delete student profile', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

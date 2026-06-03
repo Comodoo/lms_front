@@ -454,6 +454,10 @@ export async function updateExamResult(id: number | string, data: {
   });
 }
 
+export async function deleteExamResult(id: number | string) {
+  return apiRequest(`/exam-results/${id}`, { method: 'DELETE' });
+}
+
 export async function publishExamResult(id: number | string) {
   return apiRequest(`/exam-results/${id}/publish`, { method: 'POST' });
 }
@@ -467,6 +471,12 @@ export async function getStudentResults(studentId?: number | string) {
 
 export async function getCourseResults(courseOfferingId: number | string) {
   return apiRequest(`/course-offerings/${courseOfferingId}/results`);
+}
+
+// ==================== COURSES ====================
+
+export async function getCourses() {
+  return apiRequest('/courses');
 }
 
 // ==================== DASHBOARD ====================
@@ -518,9 +528,13 @@ export const apiClient = {
   getExamResult,
   createExamResult,
   updateExamResult,
+  deleteExamResult,
   publishExamResult,
   getStudentResults,
   getCourseResults,
+
+  // Courses
+  getCourses,
 
   // Dashboard
   getDashboardStats,

@@ -161,13 +161,11 @@ export default function InstructorResultsPage() {
       await deleteExamResult(selectedResult.id);
       setDeleteDialogOpen(false);
       setSelectedResult(null);
-      loadData();
     }
   };
 
   const handleSubmitResult = async (id: string) => {
     await submitExamResult(id);
-    loadData();
   };
 
   const handleCourseChange = (courseId: string) => {
@@ -183,7 +181,7 @@ export default function InstructorResultsPage() {
     const student = studentProfiles.find(s => s.id === studentId);
     if (student) {
       form.setValue('registrationNumber', student.registrationNumber);
-      form.setValue('studentName', `${student.firstName} ${student.lastName}`);
+      form.setValue('studentName', student.studentName || 'Unknown Student');
     }
   };
 
@@ -193,7 +191,6 @@ export default function InstructorResultsPage() {
     await new Promise(resolve => setTimeout(resolve, 2000));
     setIsUploading(false);
     setUploadDialogOpen(false);
-    loadData();
   };
 
   const getStatusBadge = (status: string) => {
@@ -265,7 +262,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {examResults.filter(r => r.status === 'submitted').length}
+              {examResults.filter(r => r.status === 'submitted' || r.status === 'published').length}
             </div>
           </CardContent>
         </Card>
@@ -302,10 +299,11 @@ export default function InstructorResultsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="submitted">Submitted</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
+                  {Array.from(new Set(examResults.map(r => r.status))).map(status => (
+                    <SelectItem key={status} value={status} className="capitalize">
+                      {status}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={courseFilter} onValueChange={setCourseFilter}>
@@ -443,7 +441,7 @@ export default function InstructorResultsPage() {
                         <SelectContent>
                           {studentProfiles.map((student) => (
                             <SelectItem key={student.id} value={student.id}>
-                              {student.registrationNumber} - {student.programName}
+                              {student.studentName}
                             </SelectItem>
                           ))}
                         </SelectContent>

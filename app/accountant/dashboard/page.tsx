@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth-context';
-import { paymentsApi, registrationsApi } from '@/lib/api';
+import { paymentsApi, dashboardApi } from '@/lib/api';
 import {
   CreditCard,
   TrendingUp,
@@ -17,20 +17,20 @@ export default function AccountantDashboardPage() {
   const { user } = useAuth();
 
   const [payments, setPayments] = useState<any[]>([]);
-  const [registrations, setRegistrations] = useState<any[]>([]);
+  const [statsData, setStatsData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [paymentsRes, registrationsRes] = await Promise.all([
+        const [paymentsRes, statsRes] = await Promise.all([
           paymentsApi.getAll(),
-          registrationsApi.getAll()
+          dashboardApi.getAccountantStats()
         ]);
         
         if (paymentsRes.data) setPayments(paymentsRes.data as any[]);
-        if (registrationsRes.data) setRegistrations(registrationsRes.data as any[]);
+        if (statsRes.data) setStatsData(statsRes.data);
       } catch (error) {
         console.error("Failed to load dashboard data", error);
       } finally {
@@ -41,16 +41,10 @@ export default function AccountantDashboardPage() {
     fetchData();
   }, []);
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayPayments = payments.filter(p => (p.paid_at || p.created_at || '').startsWith(today) && p.status === 'completed');
-  const totalPaymentsToday = todayPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-  
-  const pendingVerifications = payments.filter(p => p.status === 'pending').length;
-  const activeStudents = registrations.length;
-  
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const monthlyPayments = payments.filter(p => (p.paid_at || p.created_at || '').startsWith(currentMonth) && p.status === 'completed');
-  const monthlyRevenue = monthlyPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPaymentsToday = statsData?.totalPaymentsToday || 0;
+  const pendingVerifications = statsData?.pendingVerifications || 0;
+  const activeStudents = statsData?.activeStudents || 0;
+  const monthlyRevenue = statsData?.monthlyRevenue || 0;
 
   const stats = [
     {

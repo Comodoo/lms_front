@@ -357,3 +357,14 @@ export const examResultsApi = {
     return apiFetch(`/course-offerings/${courseOfferingId}/results`);
   },
 };
+
+// Dashboard API
+export const dashboardApi = {
+  async getStats() {
+    return apiFetch('/dashboard/stats');
+  },
+  
+  async getAccountantStats() {
+    return apiFetch('/dashboard/accountant-stats');
+  }
+};

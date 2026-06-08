@@ -63,11 +63,14 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
         <SheetContent side="left" className="p-0 w-64 bg-[#0D7377] border-r border-[#0a5f61]">
           <div className="flex flex-col h-full bg-[#0D7377]">
             <div className="p-6 border-b border-white/20">
-              <Link href="/accountant/dashboard" className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-white" />
+              <Link href="/accountant/dashboard" className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-lg p-1.5 flex items-center justify-center">
+                  <img src="/LOGO.png" alt="ZMC Logo" className="h-6 w-auto object-contain" />
                 </div>
-                <span className="font-bold text-lg text-white">Finance Portal</span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold leading-tight text-white">ZANZIBAR METROPOLITAN COLLEGE</span>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Finance Portal</span>
+                </div>
               </Link>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -113,11 +116,14 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
         <div className="flex flex-col flex-1 bg-[#0D7377] border-r border-[#0a5f61]">
           <div className="p-6 border-b border-white/20">
-            <Link href="/accountant/dashboard" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-white" />
+            <Link href="/accountant/dashboard" className="flex items-center gap-3">
+              <div className="bg-white/20 rounded-lg p-1.5 flex items-center justify-center">
+                <img src="/LOGO.png" alt="ZMC Logo" className="h-6 w-auto object-contain" />
               </div>
-              <span className="font-bold text-lg text-white">Finance Portal</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold leading-tight text-white">ZANZIBAR METROPOLITAN COLLEGE</span>
+                <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Finance Portal</span>
+              </div>
             </Link>
           </div>
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

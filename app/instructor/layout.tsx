@@ -62,10 +62,10 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
       <div className="p-6">
         <Link href="/instructor" className="flex items-center gap-3">
           <div className="bg-white/20 rounded-lg p-1.5">
-            <GraduationCap className="h-6 w-6 text-white" />
+            <img src="/LOGO.png" alt="ZMC Logo" className="h-6 w-auto object-contain" />
           </div>
           <div>
-            <span className="text-lg font-bold block leading-none text-white">College LMS</span>
+            <span className="text-lg font-bold block leading-none text-white">ZANZIBAR METROPOLITAN COLLEGE</span>
             <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Instructor Portal</span>
           </div>
         </Link>

@@ -96,10 +96,6 @@ export default function AdminStudentsPage() {
           <h1 className="text-3xl font-bold mb-2">Student Management</h1>
           <p className="text-muted-foreground">View and manage all enrolled students</p>
         </div>
-        <Button onClick={() => router.push('/admin/users/add?role=student')}>
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add Student
-        </Button>
       </div>
 
       <Card className="mb-6">

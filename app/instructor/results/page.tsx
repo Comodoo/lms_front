@@ -60,7 +60,7 @@ type ResultFormValues = z.infer<typeof resultSchema>;
 export default function InstructorResultsPage() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-  const { examResults, courseOfferings, studentProfiles, createExamResult, updateExamResult, deleteExamResult, submitExamResult, calculateGrade, loading } = useResults();
+  const { examResults, courseOfferings, studentProfiles, createExamResult, updateExamResult, deleteExamResult, submitExamResult, approveExamResult, calculateGrade, loading } = useResults();
 
   useEffect(() => {
     setMounted(true);
@@ -168,6 +168,10 @@ export default function InstructorResultsPage() {
     await submitExamResult(id);
   };
 
+  const handleApproveResult = async (id: string) => {
+    await approveExamResult(id);
+  };
+
   const handleCourseChange = (courseId: string) => {
     const course = courseOfferings.find(c => c.id === courseId);
     if (course) {
@@ -262,7 +266,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {examResults.filter(r => r.status === 'submitted' || r.status === 'published').length}
+              {examResults.filter(r => r.status === 'submitted').length}
             </div>
           </CardContent>
         </Card>
@@ -272,7 +276,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {examResults.filter(r => r.status === 'approved').length}
+              {examResults.filter(r => r.status === 'approved' || r.status === 'published').length}
             </div>
           </CardContent>
         </Card>
@@ -388,10 +392,22 @@ export default function InstructorResultsPage() {
                               size="sm"
                               onClick={() => handleSubmitResult(result.id)}
                               className="text-green-600 hover:text-green-700"
+                              title="Submit Result"
                             >
-                              <CheckCircle2 className="w-4 h-4" />
+                              <Upload className="w-4 h-4" />
                             </Button>
                           </>
+                        )}
+                        {result.status === 'submitted' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleApproveResult(result.id)}
+                            className="text-green-600 hover:text-green-700"
+                            title="Approve Result"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
                         )}
                         <Button
                           variant="ghost"

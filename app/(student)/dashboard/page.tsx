@@ -111,15 +111,54 @@ export default function StudentDashboard() {
 
   const gpa = totalCourses > 0 ? (totalGradePoints / totalCourses) : 0.0;
 
-  const semesterData = [
-    {
+  // Generate dynamic real data for semesters based on payments and exam results
+  const generatedSemesterData: any[] = [];
+  
+  const paidSemesters = new Set<string>();
+  payments.forEach((p: any) => {
+    if (p.status === 'completed') {
+      const desc = p.description?.toLowerCase() || '';
+      const fType = p.feeType?.toLowerCase() || '';
+      if (desc.includes('semester 1') || fType.includes('semester_1') || fType === 'tuition' || fType === 'tuition_fee') paidSemesters.add('1');
+      if (desc.includes('semester 2') || fType.includes('semester_2')) paidSemesters.add('2');
+      if (desc.includes('summer') || desc.includes('semester 3') || fType.includes('semester_3')) paidSemesters.add('3');
+    }
+  });
+
+  const resultSemesters = new Set<string>();
+  examResults.forEach((r: any) => {
+    const sem = String(r.semester || '').toLowerCase();
+    if (sem === 'first' || sem === '1') resultSemesters.add('1');
+    if (sem === 'second' || sem === '2') resultSemesters.add('2');
+    if (sem === 'summer' || sem === '3') resultSemesters.add('3');
+  });
+
+  const allKnownSemesters = Array.from(new Set([...Array.from(paidSemesters), ...Array.from(resultSemesters)])).map(Number).sort();
+
+  if (allKnownSemesters.length === 0) {
+    // Base case: Show pending first semester
+    generatedSemesterData.push({
       id: 1,
-      name: `SEMESTER ${registeredSemester === 1 ? 'ONE' : registeredSemester === 2 ? 'TWO' : registeredSemester}`,
+      name: 'SEMESTER ONE',
       period: `Academic Year ${academicYear}`,
-      status: registeredSemester > 1 || hasSemester1Payment ? 'Paid & Registered' : (currentRegistration?.status === 'approved' ? 'Awaiting Payment' : 'Registration Pending'),
-      paid: registeredSemester > 1 || hasSemester1Payment,
-    },
-  ];
+      status: currentRegistration?.status === 'approved' ? 'Awaiting Payment' : 'Registration Pending',
+      paid: false,
+    });
+  } else {
+    // Generate rows for all real semesters
+    allKnownSemesters.forEach((semNum) => {
+      const isPaid = paidSemesters.has(String(semNum));
+      generatedSemesterData.push({
+        id: semNum,
+        name: `SEMESTER ${semNum === 1 ? 'ONE' : semNum === 2 ? 'TWO' : semNum === 3 ? 'SUMMER' : semNum}`,
+        period: `Academic Year ${academicYear}`,
+        status: isPaid ? 'Paid & Registered' : 'Registered / Awaiting Payment',
+        paid: isPaid,
+      });
+    });
+  }
+
+  const semesterData = generatedSemesterData;
 
   const studentData = {
     studentId: currentRegistration?.registrationNumber || 'Pending...',
@@ -144,7 +183,7 @@ export default function StudentDashboard() {
           <Monitor className="w-12 h-12 text-primary" />
         </div>
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold">Welcome to College LMS!</h2>
+          <h2 className="text-2xl font-bold">Welcome to Zanzibar Metropolitan College (ZMC)!</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
             It looks like you haven't applied for a program yet. Please complete your academic registration to continue.
           </p>
@@ -276,12 +315,7 @@ export default function StudentDashboard() {
                 >
                   Payment Details
                 </TabsTrigger>
-                <TabsTrigger
-                  value="loan"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
-                >
-                  Loan Details
-                </TabsTrigger>
+
               </TabsList>
 
               <TabsContent value="info" className="p-6 pt-4 m-0">
@@ -347,11 +381,7 @@ export default function StudentDashboard() {
                 )}
               </TabsContent>
 
-              <TabsContent value="loan" className="p-6 pt-4 m-0">
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No loan details available.</p>
-                </div>
-              </TabsContent>
+
             </Tabs>
           </Card>
         </div>

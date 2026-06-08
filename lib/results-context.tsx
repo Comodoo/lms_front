@@ -43,6 +43,7 @@ interface ResultsContextType {
   // Student Profiles
   getStudentProfiles: () => Promise<StudentProfile[]>;
   getStudentProfileByRegistration: (registrationNumber: string) => Promise<StudentProfile | null>;
+  updateStudentProfile: (id: string, data: Partial<StudentProfile>) => Promise<void>;
   deleteStudentProfile: (id: string) => Promise<void>;
   
   // Grade Calculation
@@ -104,6 +105,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         id: reg.id.toString(), // The ID of the student profile (using registration ID)
         userId: reg.user_id?.toString() || '',
         studentName: reg.user ? `${reg.user.first_name} ${reg.user.last_name}` : (reg.first_name ? `${reg.first_name} ${reg.last_name}` : 'Unknown Student'),
+        gender: reg.gender || reg.user?.gender || undefined,
         registrationId: reg.id.toString(),
         registrationNumber: reg.registration_number || `ZMS-26-01-${String(reg.user_id || reg.id).padStart(4, '0')}`,
         programId: reg.program_id?.toString() || '',
@@ -143,7 +145,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
       
       const realExamResults: ExamResult[] = apiResults.map((r: any) => ({
         id: r.id?.toString() || `result-${Date.now()}-${Math.random()}`,
-        studentProfileId: r.student_id?.toString() || r.registration_id?.toString() || '',
+        studentProfileId: r.registration_id?.toString() || r.student_id?.toString() || '',
         registrationNumber: r.student?.registration_number || r.registration_number || (r.student_id ? `ZMS-26-01-${String(r.student_id).padStart(4, '0')}` : 'Unknown'),
         studentName: r.student ? `${r.student.first_name || ''} ${r.student.last_name || ''}`.trim() : (r.student_name || 'Unknown Student'),
         academicYear: r.course_offering?.academic_year || r.academic_year || '2024/2025',
@@ -297,7 +299,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
   const submitExamResult = async (id: string): Promise<void> => {
     setLoading(true);
     try {
-      await apiClient.publishExamResult(id).catch(() => {});
+      await apiClient.submitExamResult(id).catch(() => {});
       await loadExamResults();
     } catch (error) {
       console.error("Failed to submit result", error);
@@ -308,8 +310,14 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
 
   const approveExamResult = async (id: string): Promise<void> => {
     setLoading(true);
-    await updateExamResult(id, { status: 'approved', approvedAt: new Date() });
-    setLoading(false);
+    try {
+      await apiClient.publishExamResult(id).catch(() => {});
+      await loadExamResults();
+    } catch (error) {
+      console.error("Failed to approve result", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const rejectExamResult = async (id: string, reason: string): Promise<void> => {
@@ -428,6 +436,24 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
     return studentProfiles.find(p => p.registrationNumber === registrationNumber) || null;
   };
 
+  const updateStudentProfile = async (id: string, data: Partial<StudentProfile>): Promise<void> => {
+    setLoading(true);
+    try {
+      await registrationsApi.update(id, data);
+      setStudentProfiles(prev => 
+        prev.map(p => p.id === id ? { ...p, ...data, updatedAt: new Date() } : p)
+      );
+    } catch (e) {
+      console.error('Failed to update student profile', e);
+      // Fallback optimistic update
+      setStudentProfiles(prev => 
+        prev.map(p => p.id === id ? { ...p, ...data, updatedAt: new Date() } : p)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteStudentProfile = async (id: string): Promise<void> => {
     setLoading(true);
     try {
@@ -465,6 +491,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         deleteCourseOffering,
         getStudentProfiles,
         getStudentProfileByRegistration,
+        updateStudentProfile,
         deleteStudentProfile,
         calculateGrade,
         calculateGPA,

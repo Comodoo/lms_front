@@ -299,9 +299,9 @@ export default function StudentFeesPage() {
       <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
         <DialogContent className="max-w-md sm:max-w-lg p-0 border-none bg-transparent shadow-none print:m-0 print:max-w-none print:w-full">
           
-          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none">
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none max-h-[90vh] overflow-y-auto print:max-h-none print:overflow-visible flex flex-col">
             {/* Header (Hidden in print) */}
-            <div className="flex items-center justify-between p-4 border-b bg-muted/30 print:hidden">
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-white print:hidden">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2">
                 <Receipt className="h-5 w-5" /> Official Receipt
               </DialogTitle>
@@ -317,12 +317,16 @@ export default function StudentFeesPage() {
                 
                 {/* Official Header */}
                 <div className="text-center space-y-2 mb-8 border-b-2 border-dashed pb-6">
-                  <div className="h-12 w-12 bg-primary text-white rounded-xl mx-auto flex items-center justify-center mb-4">
-                    <CheckCircle2 className="h-8 w-8" />
+                  <div className="mx-auto flex items-center justify-center mb-4">
+                    <img src="/LOGO.png" alt="College Logo" className="h-20 object-contain" />
                   </div>
                   <h2 className="text-2xl font-black uppercase tracking-widest text-primary">Official Receipt</h2>
-                  <p className="text-muted-foreground font-medium text-sm">Zanzibar Maisha College</p>
-                  <p className="text-xs text-muted-foreground">Receipt No: #{receiptData.payment.id}-{Math.floor(Math.random() * 10000)}</p>
+                  <div className="flex flex-col items-center justify-center space-y-1 mt-2 mb-4">
+                    <p className="text-foreground font-bold text-lg uppercase">Zanzibar Metropolitan College</p>
+                    <p className="text-muted-foreground text-sm">Off Fumba Road, Mawasiliano</p>
+                    <p className="text-muted-foreground text-sm">Kisauni, Zanzibar</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-4">Receipt No: #{receiptData.payment.id}-{Math.floor(Math.random() * 10000)}</p>
                 </div>
 
                 {/* Details Grid */}

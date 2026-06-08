@@ -22,17 +22,25 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useResults } from '@/lib/results-context';
-import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download } from 'lucide-react';
+import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download, Edit } from 'lucide-react';
 
 export default function AdminResultsPage() {
   const router = useRouter();
-  const { studentProfiles: rawProfiles, examResults: rawResults, loading } = useResults();
+  const { studentProfiles: rawProfiles, examResults: rawResults, loading, updateStudentProfile } = useResults();
   
   const [mounted, setMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [programFilter, setProgramFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [academicYearFilter, setAcademicYearFilter] = useState<string>('2024/2025');
+
+  const [editingRemarkId, setEditingRemarkId] = useState<string | null>(null);
+  const [editingRemarkValue, setEditingRemarkValue] = useState<string>('');
+
+  const handleSaveRemark = async (studentId: string) => {
+    await updateStudentProfile(studentId, { remark: editingRemarkValue });
+    setEditingRemarkId(null);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -80,7 +88,14 @@ export default function AdminResultsPage() {
     return true;
   });
 
-  const getContinuationStatus = (cgpa: number, status: string) => {
+  const getContinuationStatus = (cgpa: number, status: string, remark?: string) => {
+    if (remark?.toUpperCase() === 'PASS') {
+      return { label: 'Good Standing', color: 'bg-green-100 text-green-800', icon: CheckCircle };
+    }
+    if (remark?.toUpperCase() === 'FAIL') {
+      return { label: 'Discontinued', color: 'bg-red-100 text-red-800', icon: XCircle };
+    }
+
     if (status === 'graduated') {
       return { label: 'Graduated', color: 'bg-green-100 text-green-800', icon: CheckCircle };
     }
@@ -263,6 +278,7 @@ export default function AdminResultsPage() {
                 <TableHead>Credits</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Continuation</TableHead>
+                <TableHead>Remark</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -275,7 +291,7 @@ export default function AdminResultsPage() {
                 </TableRow>
               ) : (
                 filteredStudents.map((student) => {
-                  const continuationStatus = getContinuationStatus(student.cgpa || 0, student.status);
+                  const continuationStatus = getContinuationStatus(student.cgpa || 0, student.status, student.remark);
                   const StatusIcon = continuationStatus.icon;
                   const latestGPA = getStudentLatestGPA(student.id);
                   
@@ -305,6 +321,41 @@ export default function AdminResultsPage() {
                           <StatusIcon className="w-3 h-3 mr-1" />
                           {continuationStatus.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {editingRemarkId === student.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input 
+                              value={editingRemarkValue} 
+                              onChange={(e) => setEditingRemarkValue(e.target.value)} 
+                              className="h-7 w-[100px] text-xs px-2"
+                              autoFocus
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleSaveRemark(student.id)}>
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingRemarkId(null)}>
+                              <XCircle className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between group min-w-[80px]">
+                            <span className={`font-semibold ${student.remark ? 'text-blue-600' : (student.cgpa >= 2.0 ? 'text-green-600' : (student.cgpa > 0 ? 'text-red-600' : 'text-gray-400'))}`}>
+                              {student.remark || (student.cgpa >= 2.0 ? 'PASS' : (student.cgpa > 0 ? 'FAIL' : 'N/A'))}
+                            </span>
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0" 
+                              onClick={() => {
+                                setEditingRemarkId(student.id);
+                                setEditingRemarkValue(student.remark || (student.cgpa >= 2.0 ? 'PASS' : (student.cgpa > 0 ? 'FAIL' : 'N/A')));
+                              }}
+                            >
+                              <Edit className="w-3 h-3 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

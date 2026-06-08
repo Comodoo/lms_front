@@ -36,11 +36,22 @@ import { CheckCircle2, Download, Eye, Filter, PlusCircle, Search, Trash2, XCircl
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function RegistrationsPage() {
   const router = useRouter();
   const { registrations, getRegistrations, approveRegistration, rejectRegistration, deleteRegistration, loading } = useRegistration();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   
   const [filteredRegistrations, setFilteredRegistrations] = useState<StudentRegistration[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,6 +119,73 @@ export default function RegistrationsPage() {
     }
   };
 
+  const getExportData = () => {
+    return filteredRegistrations.map((r) => ({
+      'Registration ID': r.id,
+      'First Name': r.firstName,
+      'Last Name': r.lastName,
+      'Email': r.email,
+      'Phone': r.phone,
+      'National ID': r.nationalId,
+      'Program': r.programName,
+      'Intake': r.intake,
+      'Status': r.status,
+      'Submitted At': new Date(r.submittedAt).toLocaleString(),
+    }));
+  };
+
+  const handleExportExcel = () => {
+    const data = getExportData();
+    const ws = XLSX.utils.json_to_sheet(data);
+    const colWidths = [
+      { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, 
+      { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, 
+      { wch: 15 }, { wch: 25 }
+    ];
+    ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
+    XLSX.writeFile(wb, `Student_Registrations_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleExportCSV = () => {
+    const data = getExportData();
+    const ws = XLSX.utils.json_to_sheet(data);
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Student_Registrations_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF('landscape');
+    
+    doc.text('Student Registrations Report', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+
+    const data = getExportData();
+    const headers = Object.keys(data[0] || {});
+    const rows = data.map(obj => Object.values(obj).map(val => String(val)));
+
+    autoTable(doc, {
+      startY: 30,
+      head: [headers],
+      body: rows,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [13, 115, 119] }
+    });
+
+    doc.save(`Student_Registrations_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const getStatusBadge = (status: RegistrationStatus) => {
     const variants: Record<RegistrationStatus, any> = {
       pending: 'secondary',
@@ -136,6 +214,14 @@ export default function RegistrationsPage() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
@@ -155,7 +241,7 @@ export default function RegistrationsPage() {
           <Button variant="outline" onClick={() => router.push('/admin')}>
             Back
           </Button>
-          <Button onClick={() => router.push('/registration')}>
+          <Button onClick={() => router.push('/admin/registrations/new')}>
             <PlusCircle className="mr-2 h-4 w-4" />
             New Registration
           </Button>
@@ -235,10 +321,27 @@ export default function RegistrationsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Choose Format</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportExcel}>
+                  Export as Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  Export as PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardContent>
       </Card>

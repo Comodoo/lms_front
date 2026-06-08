@@ -29,6 +29,10 @@ export default function AccountantReportsPage() {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
+  const [paymentFormat, setPaymentFormat] = useState<string>('excel');
+  const [outstandingFormat, setOutstandingFormat] = useState<string>('excel');
+  const [revenueFormat, setRevenueFormat] = useState<string>('excel');
+  const [trendFormat, setTrendFormat] = useState<string>('excel');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,9 +59,29 @@ export default function AccountantReportsPage() {
   const filteredPayments = payments.filter(p => {
     if (selectedPeriod === 'all') return true;
     const paymentDate = new Date(p.paid_at || p.created_at);
+    
+    if (selectedPeriod === 'ay-2024-2025') {
+      return paymentDate >= new Date('2024-10-01') && paymentDate <= new Date('2025-09-30');
+    }
+    if (selectedPeriod === 'sem1-2024-2025') {
+      return paymentDate >= new Date('2024-10-01') && paymentDate <= new Date('2025-02-28');
+    }
+    if (selectedPeriod === 'sem2-2024-2025') {
+      return paymentDate >= new Date('2025-03-01') && paymentDate <= new Date('2025-09-30');
+    }
+    if (selectedPeriod === 'ay-2023-2024') {
+      return paymentDate >= new Date('2023-10-01') && paymentDate <= new Date('2024-09-30');
+    }
+    if (selectedPeriod === 'sem1-2023-2024') {
+      return paymentDate >= new Date('2023-10-01') && paymentDate <= new Date('2024-02-29');
+    }
+    if (selectedPeriod === 'sem2-2023-2024') {
+      return paymentDate >= new Date('2024-03-01') && paymentDate <= new Date('2024-09-30');
+    }
+
+    // fallback for any old state values
     const year = paymentDate.getFullYear();
     const month = paymentDate.getMonth(); // 0-indexed
-
     if (selectedPeriod === '2024') return year === 2024;
     if (selectedPeriod === 'april-2024') return year === 2024 && month === 3;
     if (selectedPeriod === 'march-2024') return year === 2024 && month === 2;
@@ -66,7 +90,58 @@ export default function AccountantReportsPage() {
     return true; 
   });
 
-  const exportPaymentSummary = () => {
+  const generatePdfHeader = async (doc: any, title: string) => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    const loadImage = (url: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+        img.src = url;
+      });
+    };
+
+    let logoImg: HTMLImageElement | null = null;
+    try {
+      logoImg = await loadImage('/logo.png');
+    } catch (e) {
+      try { logoImg = await loadImage('/placeholder-logo.png'); } catch (e2) {}
+    }
+
+    doc.setFillColor(15, 118, 110);
+    doc.rect(0, 0, pageWidth, 42, 'F');
+    
+    if (logoImg) {
+      doc.addImage(logoImg, 'PNG', 14, 5, 26, 26);
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('ZANZIBAR METROPOLITAN COLLEGE', pageWidth / 2, 18, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Off Fumba Road, Mawasiliano, Kisauni, Zanzibar', pageWidth / 2, 26, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(title, 14, 52);
+    doc.setFontSize(10);
+    doc.text(`Period: ${selectedPeriod === 'all' ? 'All Time' : selectedPeriod}`, 14, 58);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 64);
+    
+    doc.setDrawColor(15, 118, 110);
+    doc.setLineWidth(0.5);
+    doc.line(14, 68, pageWidth - 14, 68);
+    
+    return 74; // Return the Y position for the start of the table
+  };
+
+  const exportPaymentSummary = async () => {
     const data = filteredPayments.map(p => {
       // Calculate student name from relationships if needed
       let name = p.student_name;
@@ -89,23 +164,70 @@ export default function AccountantReportsPage() {
       };
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [
-      {wch: 15}, // Payment ID
-      {wch: 30}, // Student Name
-      {wch: 15}, // Student ID
-      {wch: 25}, // Date
-      {wch: 15}, // Amount
-      {wch: 20}, // Fee Type
-      {wch: 15}, // Method
-      {wch: 15}  // Status
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Payment Summary');
-    XLSX.writeFile(wb, `Payment_Summary_${selectedPeriod}.xlsx`);
+    if (paymentFormat === 'pdf') {
+      try {
+        const [jsPDFModule, autoTableModule] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable')
+        ]);
+        const jsPDF = jsPDFModule.default;
+        const autoTable = autoTableModule.default;
+        
+        const doc = new jsPDF('landscape');
+        const startY = await generatePdfHeader(doc, 'Payment Summary Report');
+        
+        autoTable(doc, {
+          startY,
+          head: [['Payment ID', 'Student Name', 'Student ID', 'Date', 'Amount', 'Fee Type', 'Method', 'Status']],
+          body: data.map(row => [
+            row['Payment ID'],
+            row['Student Name'],
+            row['Student ID'],
+            row['Date'],
+            row['Amount'],
+            row['Fee Type'],
+            row['Method'],
+            row['Status']
+          ]),
+          headStyles: { fillColor: [15, 118, 110] }, // Match Teal color
+          styles: { fontSize: 9 }
+        });
+        
+        doc.save(`Payment_Summary_${selectedPeriod}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF", error);
+      }
+    } else if (paymentFormat === 'csv') {
+      const ws = XLSX.utils.json_to_sheet(data);
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Payment_Summary_${selectedPeriod}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [
+        {wch: 15}, // Payment ID
+        {wch: 30}, // Student Name
+        {wch: 15}, // Student ID
+        {wch: 25}, // Date
+        {wch: 15}, // Amount
+        {wch: 20}, // Fee Type
+        {wch: 15}, // Method
+        {wch: 15}  // Status
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Payment Summary');
+      XLSX.writeFile(wb, `Payment_Summary_${selectedPeriod}.xlsx`);
+    }
   };
 
-  const exportOutstandingFees = () => {
+  const exportOutstandingFees = async () => {
     const data: any[] = [];
     registrations.forEach(reg => {
       const regPayments = reg.payments || [];
@@ -128,14 +250,48 @@ export default function AccountantReportsPage() {
       }
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 25}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 20}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Outstanding Fees');
-    XLSX.writeFile(wb, `Outstanding_Fees_${selectedPeriod}.xlsx`);
+    if (outstandingFormat === 'pdf') {
+      try {
+        const [jsPDFModule, autoTableModule] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable')
+        ]);
+        const jsPDF = jsPDFModule.default;
+        const autoTable = autoTableModule.default;
+        
+        const doc = new jsPDF('landscape');
+        const startY = await generatePdfHeader(doc, 'Outstanding Fees Report');
+        
+        autoTable(doc, {
+          startY,
+          head: [['Student Name', 'Phone', 'Email', 'Program', 'Total Due', 'Total Paid', 'Outstanding Balance']],
+          body: data.map(row => [
+            row['Student Name'],
+            row['Phone'],
+            row['Email'],
+            row['Program'],
+            row['Total Due'],
+            row['Total Paid'],
+            row['Outstanding Balance']
+          ]),
+          headStyles: { fillColor: [15, 118, 110] },
+          styles: { fontSize: 9 }
+        });
+        
+        doc.save(`Outstanding_Fees_${selectedPeriod}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF", error);
+      }
+    } else {
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{wch: 25}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 20}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Outstanding Fees');
+      XLSX.writeFile(wb, `Outstanding_Fees_${selectedPeriod}.xlsx`);
+    }
   };
 
-  const exportRevenueByProgram = () => {
+  const exportRevenueByProgram = async () => {
     const programRevenue: Record<string, number> = {};
     
     // Group completed payments by program
@@ -153,14 +309,43 @@ export default function AccountantReportsPage() {
       'Total Revenue': amount
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 30}, {wch: 20}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Revenue By Program');
-    XLSX.writeFile(wb, `Revenue_By_Program_${selectedPeriod}.xlsx`);
+    if (revenueFormat === 'pdf') {
+      try {
+        const [jsPDFModule, autoTableModule] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable')
+        ]);
+        const jsPDF = jsPDFModule.default;
+        const autoTable = autoTableModule.default;
+        
+        const doc = new jsPDF('portrait');
+        const startY = await generatePdfHeader(doc, 'Revenue By Program Report');
+        
+        autoTable(doc, {
+          startY,
+          head: [['Program', 'Total Revenue']],
+          body: data.map(row => [
+            row['Program'],
+            row['Total Revenue'].toLocaleString()
+          ]),
+          headStyles: { fillColor: [15, 118, 110] },
+          styles: { fontSize: 10 }
+        });
+        
+        doc.save(`Revenue_By_Program_${selectedPeriod}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF", error);
+      }
+    } else {
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{wch: 30}, {wch: 20}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Revenue By Program');
+      XLSX.writeFile(wb, `Revenue_By_Program_${selectedPeriod}.xlsx`);
+    }
   };
 
-  const exportMonthlyTrend = () => {
+  const exportMonthlyTrend = async () => {
     const monthlyData: Record<string, { revenue: number, count: number }> = {};
     
     completedPayments.forEach(p => {
@@ -181,11 +366,42 @@ export default function AccountantReportsPage() {
       'Average Payment': stats.count > 0 ? Math.round(stats.revenue / stats.count) : 0
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch: 20}, {wch: 20}, {wch: 20}, {wch: 20}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Monthly Trend');
-    XLSX.writeFile(wb, `Monthly_Trend_${selectedPeriod}.xlsx`);
+    if (trendFormat === 'pdf') {
+      try {
+        const [jsPDFModule, autoTableModule] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable')
+        ]);
+        const jsPDF = jsPDFModule.default;
+        const autoTable = autoTableModule.default;
+        
+        const doc = new jsPDF('portrait');
+        const startY = await generatePdfHeader(doc, 'Monthly Trend Analysis Report');
+        
+        autoTable(doc, {
+          startY,
+          head: [['Month', 'Total Revenue', 'Number of Payments', 'Average Payment']],
+          body: data.map(row => [
+            row['Month'],
+            row['Total Revenue'].toLocaleString(),
+            row['Number of Payments'].toLocaleString(),
+            row['Average Payment'].toLocaleString()
+          ]),
+          headStyles: { fillColor: [15, 118, 110] },
+          styles: { fontSize: 10 }
+        });
+        
+        doc.save(`Monthly_Trend_${selectedPeriod}.pdf`);
+      } catch (error) {
+        console.error("Failed to generate PDF", error);
+      }
+    } else {
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{wch: 20}, {wch: 20}, {wch: 20}, {wch: 20}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Monthly Trend');
+      XLSX.writeFile(wb, `Monthly_Trend_${selectedPeriod}.xlsx`);
+    }
   };
 
   const completedPayments = filteredPayments.filter(p => p.status === 'completed');
@@ -235,19 +451,21 @@ export default function AccountantReportsPage() {
           <p className="text-muted-foreground">Generate and download financial reports</p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-            <SelectTrigger className="w-[180px]">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="april-2024">April 2024</SelectItem>
-              <SelectItem value="march-2024">March 2024</SelectItem>
-              <SelectItem value="q1-2024">Q1 2024</SelectItem>
-              <SelectItem value="2024">Year 2024</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger className="w-[240px]">
+                <Calendar className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="ay-2024-2025">Academic Year 2024/2025</SelectItem>
+                <SelectItem value="sem1-2024-2025">-- Semester 1 (2024/2025)</SelectItem>
+                <SelectItem value="sem2-2024-2025">-- Semester 2 (2024/2025)</SelectItem>
+                <SelectItem value="ay-2023-2024">Academic Year 2023/2024</SelectItem>
+                <SelectItem value="sem1-2023-2024">-- Semester 1 (2023/2024)</SelectItem>
+                <SelectItem value="sem2-2023-2024">-- Semester 2 (2023/2024)</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
       </div>
 
@@ -333,9 +551,27 @@ export default function AccountantReportsPage() {
                   Comprehensive overview of all payments received, categorized by fee type and payment method.
                 </p>
                 <div className="flex items-center gap-2 mb-4">
-                  <Badge variant="outline">PDF</Badge>
-                  <Badge variant="outline">Excel</Badge>
-                  <Badge variant="outline">CSV</Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={paymentFormat === 'pdf' ? 'default' : 'outline'}
+                    onClick={() => setPaymentFormat('pdf')}
+                  >
+                    PDF
+                  </Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={paymentFormat === 'excel' ? 'default' : 'outline'}
+                    onClick={() => setPaymentFormat('excel')}
+                  >
+                    Excel
+                  </Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={paymentFormat === 'csv' ? 'default' : 'outline'}
+                    onClick={() => setPaymentFormat('csv')}
+                  >
+                    CSV
+                  </Badge>
                 </div>
                 <Button className="w-full gap-2" onClick={exportPaymentSummary}>
                   <Download className="h-4 w-4" />
@@ -356,8 +592,20 @@ export default function AccountantReportsPage() {
                   List of students with outstanding fee balances, including contact details and amounts due.
                 </p>
                 <div className="flex items-center gap-2 mb-4">
-                  <Badge variant="outline">PDF</Badge>
-                  <Badge variant="outline">Excel</Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={outstandingFormat === 'pdf' ? 'default' : 'outline'}
+                    onClick={() => setOutstandingFormat('pdf')}
+                  >
+                    PDF
+                  </Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={outstandingFormat === 'excel' ? 'default' : 'outline'}
+                    onClick={() => setOutstandingFormat('excel')}
+                  >
+                    Excel
+                  </Badge>
                 </div>
                 <Button className="w-full gap-2" onClick={exportOutstandingFees}>
                   <Download className="h-4 w-4" />
@@ -378,9 +626,20 @@ export default function AccountantReportsPage() {
                   Breakdown of revenue generated from each academic program and department.
                 </p>
                 <div className="flex items-center gap-2 mb-4">
-                  <Badge variant="outline">PDF</Badge>
-                  <Badge variant="outline">Excel</Badge>
-                  <Badge variant="outline">Charts</Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={revenueFormat === 'pdf' ? 'default' : 'outline'}
+                    onClick={() => setRevenueFormat('pdf')}
+                  >
+                    PDF
+                  </Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={revenueFormat === 'excel' ? 'default' : 'outline'}
+                    onClick={() => setRevenueFormat('excel')}
+                  >
+                    Excel
+                  </Badge>
                 </div>
                 <Button className="w-full gap-2" onClick={exportRevenueByProgram}>
                   <Download className="h-4 w-4" />
@@ -401,8 +660,20 @@ export default function AccountantReportsPage() {
                   Historical payment trends and projections for financial planning.
                 </p>
                 <div className="flex items-center gap-2 mb-4">
-                  <Badge variant="outline">PDF</Badge>
-                  <Badge variant="outline">Charts</Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={trendFormat === 'pdf' ? 'default' : 'outline'}
+                    onClick={() => setTrendFormat('pdf')}
+                  >
+                    PDF
+                  </Badge>
+                  <Badge 
+                    className="cursor-pointer transition-colors" 
+                    variant={trendFormat === 'excel' ? 'default' : 'outline'}
+                    onClick={() => setTrendFormat('excel')}
+                  >
+                    Excel
+                  </Badge>
                 </div>
                 <Button className="w-full gap-2" onClick={exportMonthlyTrend}>
                   <Download className="h-4 w-4" />

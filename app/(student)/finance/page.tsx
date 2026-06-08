@@ -4,11 +4,14 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useRegistration } from '@/lib/registration-context';
 import { apiClient } from '@/lib/api-client';
 import { RegistrationPayment } from '@/lib/college-types';
-import { CreditCard, Wallet, AlertCircle, FileText, Download, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { CreditCard, Wallet, AlertCircle, FileText, Download, CheckCircle2, XCircle, Clock, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import * as htmlToImage from 'html-to-image';
+import jsPDF from 'jspdf';
 
 export default function FinancePage() {
   const { registrations } = useRegistration();
@@ -19,6 +22,9 @@ export default function FinancePage() {
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [semesterFilter, setSemesterFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Receipt Modal
+  const [selectedReceipt, setSelectedReceipt] = useState<RegistrationPayment | null>(null);
 
   const currentRegistration = registrations[0];
 
@@ -41,16 +47,64 @@ export default function FinancePage() {
     fetchPayments();
   }, [currentRegistration?.id]);
 
+  const handleDownloadReceipt = async () => {
+    const element = document.getElementById('receipt-printable-area');
+    if (!element) return;
+    
+    try {
+      const imgData = await htmlToImage.toPng(element, { 
+        pixelRatio: 2, 
+        backgroundColor: '#ffffff' 
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pdfWidth - (margin * 2);
+      
+      // Calculate aspect ratio height
+      const rect = element.getBoundingClientRect();
+      const contentHeight = (rect.height * contentWidth) / rect.width;
+      
+      pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+      pdf.save(`receipt_${selectedReceipt?.controlNumber || 'payment'}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF', error);
+    }
+  };
+
+  // Extract unique years for the filter
+  const uniqueYears = Array.from(new Set(payments.map(p => new Date(p.createdAt).getFullYear().toString()))).sort((a, b) => b.localeCompare(a));
+
+  // Extract unique semesters from payment descriptions dynamically
+  const uniqueSemesters = Array.from(new Set(payments.map(payment => {
+    const descLower = (payment.description || '').toLowerCase();
+    const fType = (payment.feeType || '').toLowerCase();
+    if (descLower.includes('semester 1') || fType.includes('semester_1') || descLower.includes('first')) return '1';
+    if (descLower.includes('semester 2') || fType.includes('semester_2') || descLower.includes('second')) return '2';
+    if (descLower.includes('summer') || descLower.includes('semester 3') || fType.includes('semester_3')) return '3';
+    return 'other';
+  }))).filter(s => s !== 'other').sort();
+
   // Derived state
   const filteredPayments = useMemo(() => {
     return payments.filter(payment => {
-      // Semester parsing from description (mocking logic since DB might just have "Semester 1 Tuition Fee")
       const descLower = (payment.description || '').toLowerCase();
+      const fType = (payment.feeType || '').toLowerCase();
       
+      let semString = 'other';
+      if (descLower.includes('semester 1') || fType.includes('semester_1') || descLower.includes('first')) semString = '1';
+      else if (descLower.includes('semester 2') || fType.includes('semester_2') || descLower.includes('second')) semString = '2';
+      else if (descLower.includes('summer') || descLower.includes('semester 3') || fType.includes('semester_3')) semString = '3';
+
       let matchesSemester = true;
       if (semesterFilter !== 'all') {
-        if (semesterFilter === '1' && !descLower.includes('semester 1') && !descLower.includes('first')) matchesSemester = false;
-        if (semesterFilter === '2' && !descLower.includes('semester 2') && !descLower.includes('second')) matchesSemester = false;
+        matchesSemester = (semString === semesterFilter);
       }
 
       let matchesYear = true;
@@ -71,9 +125,6 @@ export default function FinancePage() {
   const totalBilled = payments.reduce((acc, p) => acc + Number(p.amount), 0);
   const totalPaid = payments.filter(p => p.status === 'completed').reduce((acc, p) => acc + Number(p.amount), 0);
   const balance = totalBilled - totalPaid;
-
-  // Extract unique years for the filter
-  const uniqueYears = Array.from(new Set(payments.map(p => new Date(p.createdAt).getFullYear().toString()))).sort((a, b) => b.localeCompare(a));
 
   if (loading) {
     return (
@@ -182,8 +233,11 @@ export default function FinancePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Semesters</SelectItem>
-                  <SelectItem value="1">Semester 1</SelectItem>
-                  <SelectItem value="2">Semester 2</SelectItem>
+                  {uniqueSemesters.map(sem => (
+                    <SelectItem key={sem} value={sem}>
+                      Semester {sem === '3' ? 'Summer' : sem}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -269,6 +323,7 @@ export default function FinancePage() {
                           size="icon" 
                           className="h-8 w-8 text-slate-400 hover:text-blue-600"
                           disabled={payment.status !== 'completed'}
+                          onClick={() => setSelectedReceipt(payment)}
                         >
                           <Download className="w-4 h-4" />
                         </Button>
@@ -281,6 +336,76 @@ export default function FinancePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Receipt Modal */}
+      <Dialog open={!!selectedReceipt} onOpenChange={(open) => !open && setSelectedReceipt(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Payment Receipt</DialogTitle>
+            <DialogDescription>
+              Official receipt for {selectedReceipt?.description || selectedReceipt?.feeType}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedReceipt && (
+            <div id="receipt-printable-area" className="p-4 border rounded-lg bg-white mt-4 space-y-4">
+              <div className="text-center border-b pb-4 mb-4 flex flex-col items-center">
+                <img src="/LOGO.png" alt="College Logo" className="h-16 mb-2 object-contain" crossOrigin="anonymous" />
+                <h2 className="text-xl font-bold uppercase tracking-wide">Zanzibar Metropolitan College (ZMC)</h2>
+                <p className="text-sm text-slate-500">Official Payment Receipt</p>
+              </div>
+              
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Receipt No:</span>
+                  <span className="font-mono font-medium">#{selectedReceipt.id.toString().padStart(6, '0')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Date:</span>
+                  <span className="font-medium">
+                    {new Date(selectedReceipt.paidAt || selectedReceipt.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Control Number:</span>
+                  <span className="font-mono font-medium">{selectedReceipt.controlNumber}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t mt-2">
+                  <span className="text-slate-500">Student ID:</span>
+                  <span className="font-medium">{currentRegistration?.registrationNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Description:</span>
+                  <span className="font-medium">{selectedReceipt.description || selectedReceipt.feeType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status:</span>
+                  <span className="font-medium text-emerald-600 uppercase">{selectedReceipt.status}</span>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700">Total Amount:</span>
+                  <span className="text-lg font-bold text-slate-900">
+                    {Number(selectedReceipt.amount).toLocaleString()} TSH
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setSelectedReceipt(null)}>
+              Close
+            </Button>
+            <Button onClick={handleDownloadReceipt} className="gap-2 bg-blue-600 hover:bg-blue-700">
+              <Download className="w-4 h-4" />
+              Download Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

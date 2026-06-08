@@ -102,10 +102,15 @@ export default function AccountantPaymentsPage() {
     return { ...payment, calculated_name: name || 'N/A' };
   }).filter((payment) => {
     const searchString = searchTerm.toLowerCase();
+    
+    const safeName = String(payment.calculated_name || '').toLowerCase();
+    const safeId = String(payment.id || '').toLowerCase();
+    const safeControlNumber = String(payment.control_number || '').toLowerCase();
+    
     const matchesSearch =
-      payment.calculated_name.toLowerCase().includes(searchString) ||
-      String(payment.id).toLowerCase().includes(searchString) ||
-      payment.control_number?.toLowerCase().includes(searchString);
+      safeName.includes(searchString) ||
+      safeId.includes(searchString) ||
+      safeControlNumber.includes(searchString);
 
     const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
 

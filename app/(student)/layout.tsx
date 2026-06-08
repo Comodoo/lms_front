@@ -91,8 +91,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex items-center">
-            <span className="text-xl font-bold text-white">SRMS</span>
+          <div className="bg-white/20 rounded-lg p-1.5 flex items-center justify-center">
+            <img src="/LOGO.png" alt="ZMC Logo" className="h-6 w-auto object-contain" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold leading-tight text-white">ZANZIBAR METROPOLITAN COLLEGE</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Student Portal</span>
           </div>
         </Link>
       </div>

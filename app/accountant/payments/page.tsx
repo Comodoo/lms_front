@@ -1,435 +1,653 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Search, Download, TrendingUp, CheckCircle, DollarSign, Plus, MoreHorizontal, Edit, Trash2, XCircle, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import Swal from 'sweetalert2';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { paymentsApi } from '@/lib/api';
-import {
-  CheckCircle,
-  CreditCard,
-  Download,
-  Eye,
-  Filter,
-  Search,
-  XCircle,
-  Loader2,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 
-interface Payment {
-  id: string;
-  student_id?: string;
-  registration_id?: string;
-  student_name?: string;
-  calculated_name?: string;
-  registration?: {
-    first_name?: string;
-    last_name?: string;
-  };
-  student?: {
-    name?: string;
-  };
-  fee_type: string;
-  amount: number;
-  method: string;
-  status: 'pending' | 'completed' | 'failed';
-  paid_at?: string;
-  control_number?: string;
-  notes?: string;
-  processed_by?: string;
-  created_at: string;
+// Ensure SweetAlert2 is always on top of Radix Dialogs
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.innerHTML = `
+    .swal2-container {
+      z-index: 99999 !important;
+      pointer-events: auto !important;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 export default function AccountantPaymentsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  const [fees, setFees] = useState<any[]>([]);
+  const [programs, setPrograms] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
-  useEffect(() => {
-    loadPayments();
-  }, []);
+  const [feeSearchTerm, setFeeSearchTerm] = useState('');
 
-  const loadPayments = async () => {
-    setLoading(true);
-    setError(null);
-    const response = await paymentsApi.getAll();
-    if (response.error) {
-      setError(response.error);
-    } else if (response.data) {
-      setPayments(response.data as Payment[]);
-    }
-    setLoading(false);
-  };
+  // Payment Filters
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterSemester, setFilterSemester] = useState('all');
+  const [filterStudentYear, setFilterStudentYear] = useState('all');
+  const [filterProgram, setFilterProgram] = useState('all');
 
-  const handleVerifyPayment = async (paymentId: string) => {
-    const response = await paymentsApi.verifyCashPayment(paymentId, { notes: 'Verified by accountant' });
-    if (response.error) {
-      setError(response.error);
-    } else {
-      loadPayments();
-    }
-  };
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  const filteredPayments = payments.map(payment => {
-    // Determine student name from nested relations if not present directly
-    let name = payment.student_name;
-    if (!name && payment.registration) {
-      name = `${payment.registration.first_name || ''} ${payment.registration.last_name || ''}`.trim();
-    }
-    if (!name && payment.student) {
-      name = payment.student.name;
-    }
-
-    return { ...payment, calculated_name: name || 'N/A' };
-  }).filter((payment) => {
-    const searchString = searchTerm.toLowerCase();
-    const matchesSearch =
-      payment.calculated_name.toLowerCase().includes(searchString) ||
-      String(payment.id).toLowerCase().includes(searchString) ||
-      payment.control_number?.toLowerCase().includes(searchString);
-
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+  // Fee Form State
+  const [isFeeDialogOpen, setIsFeeDialogOpen] = useState(false);
+  const [selectedFee, setSelectedFee] = useState<any>(null);
+  const [feeForm, setFeeForm] = useState({
+      name: '',
+      type: 'tuition',
+      program_id: '',
+      applicable_semester: 'both',
+      semester_1_amount: 0,
+      semester_2_amount: 0,
+      currency: 'TZS',
+      description: '',
+      is_active: true,
   });
 
-  const exportToExcel = () => {
-    // Prepare the data mapping
-    const data = filteredPayments.map(payment => ({
-      'Payment ID': payment.id,
-      'Control Number': payment.control_number || '',
-      'Initiated Date': payment.created_at ? new Date(payment.created_at).toLocaleString() : '',
-      'Paid Date': payment.paid_at ? new Date(payment.paid_at).toLocaleString() : '',
-      'Student Name': payment.calculated_name || 'N/A',
-      'Student ID': payment.student_id || '',
-      'Fee Type': payment.fee_type,
-      'Amount (TSH)': payment.amount,
-      'Method': payment.method,
-      'Status': payment.status
-    }));
+  useEffect(() => {
+    if (isAuthenticated) {
+        fetchData();
+    } else {
+        setLoading(false);
+    }
+  }, [isAuthenticated]);
 
-    // Create the worksheet
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    // Set column widths to prevent "###" and make it readable
-    const wscols = [
-      { wch: 15 }, // Payment ID
-      { wch: 20 }, // Control Number
-      { wch: 22 }, // Initiated Date
-      { wch: 22 }, // Paid Date
-      { wch: 30 }, // Student Name
-      { wch: 12 }, // Student ID
-      { wch: 20 }, // Fee Type
-      { wch: 15 }, // Amount (TSH)
-      { wch: 15 }, // Method
-      { wch: 12 }, // Status
-    ];
-    worksheet['!cols'] = wscols;
-
-    // Create workbook and append worksheet
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Payments');
-
-    // Trigger download of the xlsx file
-    XLSX.writeFile(workbook, `payments_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+          // Pass true to getFees to fetch ALL fees (including inactive ones)
+          const [feesRes, programsRes, paymentsRes] = await Promise.all([
+              apiClient.getFees(undefined, true),
+              apiClient.getPrograms(),
+              apiClient.getPayments(),
+          ]);
+          setFees((feesRes as any[]) || []);
+          setPrograms((programsRes as any[]) || []);
+          setPayments((paymentsRes as any[]) || []);
+      } catch (err: any) {
+          setError(err.message || 'Failed to load data');
+      }
+      setLoading(false);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>;
-      case 'failed':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+  // ================= FEES LOGIC =================
+  const handleSaveFee = async () => {
+      try {
+          const payload = {
+              ...feeForm,
+              program_id: feeForm.type === 'tuition' ? feeForm.program_id : null,
+              semester_1_amount: feeForm.applicable_semester === 'semester_2' ? 0 : feeForm.semester_1_amount,
+              semester_2_amount: feeForm.applicable_semester === 'semester_1' ? 0 : feeForm.semester_2_amount,
+          };
+
+          if (selectedFee) {
+              await apiClient.updateFee(selectedFee.id, payload);
+              Swal.fire('Updated!', 'Fee has been updated.', 'success');
+          } else {
+              await apiClient.createFee(payload);
+              Swal.fire('Created!', 'Fee has been created.', 'success');
+          }
+          setIsFeeDialogOpen(false);
+          fetchData();
+      } catch (err: any) {
+          Swal.fire('Error', err.message || 'Failed to save fee', 'error');
+      }
+  };
+
+  const handleDeleteFee = async (id: string) => {
+      const result = await Swal.fire({
+          title: 'Are you sure?',
+          text: "This fee will be deleted from the system.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+          try {
+              await apiClient.deleteFee(id);
+              Swal.fire('Deleted!', 'Fee has been deleted.', 'success');
+              fetchData();
+          } catch (err: any) {
+              Swal.fire('Error', err.message || 'Failed to delete fee', 'error');
+          }
+      }
+  };
+
+  const toggleFeeStatus = async (fee: any) => {
+    try {
+      const payload = {
+        ...fee,
+        is_active: !fee.is_active
+      };
+      await apiClient.updateFee(fee.id, payload);
+      fetchData();
+    } catch (err: any) {
+      Swal.fire('Error', err.message || 'Failed to update fee status', 'error');
     }
   };
 
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case 'mpesa':
-        return <span className="text-green-600 font-medium">M-Pesa</span>;
-      case 'cash':
-        return <span className="text-blue-600 font-medium">Cash</span>;
-      case 'bank_transfer':
-        return <span className="text-purple-600 font-medium">Bank</span>;
-      case 'card':
-        return <span className="text-orange-600 font-medium">Card</span>;
-      default:
-        return <span className="text-muted-foreground">{method}</span>;
-    }
+  const openFeeDialog = (fee?: any) => {
+      if (fee) {
+          setSelectedFee(fee);
+          setFeeForm({
+              name: fee.name,
+              type: fee.type,
+              program_id: fee.program_id?.toString() || '',
+              applicable_semester: fee.applicable_semester,
+              semester_1_amount: fee.semester_1_amount,
+              semester_2_amount: fee.semester_2_amount,
+              currency: fee.currency || 'TZS',
+              description: fee.description || '',
+              is_active: fee.is_active,
+          });
+      } else {
+          setSelectedFee(null);
+          setFeeForm({
+              name: '',
+              type: 'tuition',
+              program_id: '',
+              applicable_semester: 'both',
+              semester_1_amount: 0,
+              semester_2_amount: 0,
+              currency: 'TZS',
+              description: '',
+              is_active: true,
+          });
+      }
+      setIsFeeDialogOpen(true);
   };
+
+  const filteredPayments = payments.filter((p) => {
+    const paymentYear = new Date(p.created_at).getFullYear().toString();
+    if (filterYear !== 'all' && paymentYear !== filterYear) return false;
+
+    if (filterSemester !== 'all') {
+      const desc = (p.description || '').toLowerCase();
+      if (filterSemester === '1' && !desc.includes('semester 1') && !desc.includes('sem 1')) return false;
+      if (filterSemester === '2' && !desc.includes('semester 2') && !desc.includes('sem 2')) return false;
+    }
+
+    if (filterProgram !== 'all' && p.registration?.program_id?.toString() !== filterProgram) {
+      return false;
+    }
+
+    if (filterStudentYear !== 'all') {
+      const regYear = new Date(p.registration?.created_at || p.created_at).getFullYear();
+      const studentYear = (parseInt(paymentYear) - regYear) + 1;
+      if (studentYear.toString() !== filterStudentYear) return false;
+    }
+
+    return true;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const totalRevenue = filteredPayments
+    .filter(p => p.status === 'completed')
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const completedRegistrations = filteredPayments.filter(p => p.status === 'completed').length;
+
+  const filteredFees = fees.filter(
+      (f) =>
+          f.name.toLowerCase().includes(feeSearchTerm.toLowerCase())
+  );
+
+  if (!isAuthenticated) return null;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+      return (
+          <div className="flex items-center justify-center min-h-[400px]">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+      );
   }
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <XCircle className="h-12 w-12 text-red-500" />
-        <p className="text-muted-foreground">{error}</p>
-        <Button onClick={loadPayments} variant="outline">Retry</Button>
-      </div>
-    );
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+              <XCircle className="h-12 w-12 text-red-500" />
+              <p className="text-muted-foreground">{error}</p>
+              <Button onClick={fetchData} variant="outline">Retry</Button>
+          </div>
+      );
   }
 
-  const totalAmount = filteredPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const pendingAmount = filteredPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const completedCount = filteredPayments.filter(p => p.status === 'completed').length;
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Payment Management</h1>
-          <p className="text-muted-foreground">View and manage all student payments</p>
+          <h1 className="text-3xl font-bold mb-2">Revenue & Payments</h1>
+          <p className="text-muted-foreground">Monitor student fees, manage fee structures, and control numbers</p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={exportToExcel}>
-          <Download className="h-4 w-4" />
-          Export Report
-        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Amount</p>
-                <p className="text-2xl font-bold break-all">TSH {totalAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0 ml-4">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="transactions" className="w-full">
+        <TabsList className="mb-4">
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="fees">Fee Registration</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending Amount</p>
-                <p className="text-2xl font-bold text-yellow-600 break-all">TSH {pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center shrink-0 ml-4">
-                <Filter className="h-6 w-6 text-yellow-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* ================= TRANSACTIONS TAB ================= */}
+        <TabsContent value="transactions" className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-2 flex-wrap">
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Calendar Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filterSemester} onValueChange={setFilterSemester}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
+                  <SelectItem value="1">Semester 1</SelectItem>
+                  <SelectItem value="2">Semester 2</SelectItem>
+                </SelectContent>
+              </Select>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Completed Payments</p>
-                <p className="text-2xl font-bold text-green-600">{completedCount}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              <Select value={filterStudentYear} onValueChange={setFilterStudentYear}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Student Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Student Years</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by student name, payment ID, or control number..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+              <Select value={filterProgram} onValueChange={setFilterProgram}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Program" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Payments Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Payments ({filteredPayments.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Payment ID</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Student</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Fee Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Method</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.id} className="border-b last:border-0 hover:bg-muted/50">
-                    <td className="py-3 px-4">
-                      <div className="font-medium">{payment.id}</div>
-                      {payment.control_number && <div className="text-xs text-muted-foreground">{payment.control_number}</div>}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-medium">{payment.calculated_name}</div>
-                      {payment.student_id && <div className="text-xs text-muted-foreground">ID: {payment.student_id}</div>}
-                    </td>
-                    <td className="py-3 px-4">{payment.fee_type}</td>
-                    <td className="py-3 px-4 font-medium">TSH {payment.amount.toLocaleString()}</td>
-                    <td className="py-3 px-4">{getMethodIcon(payment.method)}</td>
-                    <td className="py-3 px-4">{getStatusBadge(payment.status)}</td>
-                    <td className="py-3 px-4 text-muted-foreground">{new Date(payment.created_at).toLocaleDateString()}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setSelectedPayment(payment)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {payment.status === 'pending' && payment.method === 'cash' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
-                            onClick={() => handleVerifyPayment(payment.id)}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Button variant="outline" onClick={() => router.push('/admin/reports')}>
+              <Download className="w-4 h-4 mr-2" />
+              Go to Reports
+            </Button>
           </div>
 
-          {filteredPayments.length === 0 && (
-            <div className="text-center py-12">
-              <XCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No payments found matching your criteria</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-primary flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Total Revenue (TSH)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold break-all">{totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+                <p className="text-xs text-muted-foreground mt-1">Confirmed collections</p>
+              </CardContent>
+            </Card>
 
-      {/* Payment Details Dialog */}
-      <Dialog open={!!selectedPayment} onOpenChange={(open) => !open && setSelectedPayment(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Payment Details</DialogTitle>
-            <DialogDescription>
-              View complete details for this payment record.
-            </DialogDescription>
-          </DialogHeader>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  Paid Registrations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">{completedRegistrations}</div>
+                <p className="text-xs text-muted-foreground mt-1">Students with complete registration</p>
+              </CardContent>
+            </Card>
 
-          {selectedPayment && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Payment ID</p>
-                  <p className="font-medium">{selectedPayment.id}</p>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  Pending Payments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">
+                  {filteredPayments.filter(p => p.status === 'pending').length}
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Date</p>
-                  <p className="font-medium">{new Date(selectedPayment.created_at).toLocaleString()}</p>
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">Outstanding invoices</p>
+              </CardContent>
+            </Card>
+          </div>
 
-                <div className="col-span-2">
-                  <p className="text-sm text-muted-foreground">Student</p>
-                  <p className="font-medium">{selectedPayment.calculated_name}</p>
-                  {selectedPayment.student_id && (
-                    <p className="text-sm text-muted-foreground">ID: {selectedPayment.student_id}</p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+              <CardDescription>A list of all student fee payments and their statuses</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student Name</TableHead>
+                    <TableHead>Reg. Number</TableHead>
+                    <TableHead>Fee Type</TableHead>
+                    <TableHead>Control Number</TableHead>
+                    <TableHead>Amount (TSH)</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedPayments.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell className="font-medium">
+                        {payment.registration ? `${payment.registration.first_name} ${payment.registration.last_name}` : 'Unknown'}
+                      </TableCell>
+                      <TableCell>{payment.registration?.registration_number || (payment.registration ? `ZMC-${String(new Date(payment.registration.created_at || payment.created_at || Date.now()).getFullYear()).slice(-2)}-01-${String(payment.registration.id).padStart(4, '0')}` : 'N/A')}</TableCell>
+                      <TableCell className="capitalize">{payment.fee_type?.replace(/_/g, ' ')}</TableCell>
+                      <TableCell className="font-mono text-xs">{payment.control_number}</TableCell>
+                      <TableCell>{Number(payment.amount).toLocaleString()}</TableCell>
+                      <TableCell>{new Date(payment.paid_at || payment.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge variant={payment.status === 'completed' ? 'secondary' : 'outline'} className={payment.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' : ''}>
+                          {payment.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredPayments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                        No payments found
+                      </TableCell>
+                    </TableRow>
                   )}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="mt-4 flex justify-end">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <span className="text-sm px-4">Page {currentPage} of {totalPages}</span>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                <div>
-                  <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-medium text-lg text-primary">TSH {selectedPayment.amount.toLocaleString()}</p>
+        {/* ================= FEES TAB ================= */}
+        <TabsContent value="fees" className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="relative w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search fees..."
+                        value={feeSearchTerm}
+                        onChange={(e) => setFeeSearchTerm(e.target.value)}
+                        className="pl-10 h-9"
+                    />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <div className="mt-1">{getStatusBadge(selectedPayment.status)}</div>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Fee Type</p>
-                  <p className="font-medium capitalize">{selectedPayment.fee_type.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Method</p>
-                  <div className="mt-1">{getMethodIcon(selectedPayment.method)}</div>
-                </div>
-
-                {selectedPayment.control_number && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground">Control Number</p>
-                    <p className="font-mono bg-muted p-2 rounded-md mt-1">{selectedPayment.control_number}</p>
-                  </div>
-                )}
-
-                {selectedPayment.notes && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground">Notes</p>
-                    <p className="text-sm bg-muted/50 p-2 rounded-md mt-1">{selectedPayment.notes}</p>
-                  </div>
-                )}
-              </div>
+                <Button onClick={() => openFeeDialog()} className="gap-2 h-9">
+                    <Plus className="h-4 w-4" /> Create Fee
+                </Button>
             </div>
-          )}
-        </DialogContent>
+
+            <Card>
+                <CardHeader className="py-3">
+                    <CardTitle className="text-sm font-semibold">Registered Fees ({filteredFees.length})</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b bg-muted/50">
+                                    <th className="text-left py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Fee Name</th>
+                                    <th className="text-left py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Type</th>
+                                    <th className="text-left py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Program</th>
+                                    <th className="text-left py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Amount & Semesters</th>
+                                    <th className="text-center py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Status</th>
+                                    <th className="text-left py-2 px-4 font-medium text-muted-foreground text-[10px] uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-xs">
+                                {filteredFees.map((fee) => (
+                                    <tr key={fee.id} className="border-b last:border-0 hover:bg-muted/30">
+                                        <td className="py-2 px-4">
+                                            <p className="font-semibold">{fee.name}</p>
+                                            <p className="text-[10px] text-muted-foreground">{fee.description}</p>
+                                        </td>
+                                        <td className="py-2 px-4">
+                                            <Badge variant={fee.type === 'tuition' ? 'default' : 'secondary'} className="text-[10px]">
+                                                {fee.type === 'tuition' ? 'Tuition' : 'Direct Cost'}
+                                            </Badge>
+                                        </td>
+                                        <td className="py-2 px-4 text-xs">
+                                            {fee.type === 'tuition' && fee.program ? fee.program.code : 'All Students'}
+                                        </td>
+                                        <td className="py-2 px-4">
+                                            <div className="font-bold text-primary mb-1">
+                                                {fee.currency} {parseFloat(fee.total_amount).toLocaleString()}
+                                            </div>
+                                            <div className="text-[10px] space-y-1">
+                                              {fee.applicable_semester === 'both' || fee.applicable_semester === 'semester_1' ? (
+                                                  <div className="flex justify-between w-24"><span>Sem 1:</span> <span className="font-medium">{parseFloat(fee.semester_1_amount).toLocaleString()}</span></div>
+                                              ) : null}
+                                              {fee.applicable_semester === 'both' || fee.applicable_semester === 'semester_2' ? (
+                                                  <div className="flex justify-between w-24"><span>Sem 2:</span> <span className="font-medium">{parseFloat(fee.semester_2_amount).toLocaleString()}</span></div>
+                                              ) : null}
+                                            </div>
+                                        </td>
+                                        <td className="py-2 px-4 text-center">
+                                            <div className="flex flex-col items-center gap-1">
+                                              <Switch 
+                                                checked={fee.is_active} 
+                                                onCheckedChange={() => toggleFeeStatus(fee)} 
+                                              />
+                                              <span className={`text-[10px] ${fee.is_active ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                                {fee.is_active ? 'Active' : 'Inactive'}
+                                              </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-2 px-4 text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => openFeeDialog(fee)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => toggleFeeStatus(fee)}>
+                                                        <CheckCircle className="mr-2 h-4 w-4" /> {fee.is_active ? 'Deactivate' : 'Activate'}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleDeleteFee(fee.id)} className="text-destructive">
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredFees.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No fees registered yet.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* ================= FEE DIALOG ================= */}
+      <Dialog open={isFeeDialogOpen} onOpenChange={setIsFeeDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                  <DialogTitle>{selectedFee ? 'Edit Fee' : 'Create Fee'}</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                  <div className="col-span-2 space-y-2">
+                      <Label>Fee Name</Label>
+                      <Input value={feeForm.name} onChange={(e) => setFeeForm({ ...feeForm, name: e.target.value })} placeholder="e.g. Semester Tuition Fee" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                      <Label>Fee Type</Label>
+                      <Select value={feeForm.type} onValueChange={(v) => setFeeForm({ ...feeForm, type: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="tuition">Tuition (Attached to Program)</SelectItem>
+                              <SelectItem value="direct">Direct Cost (All Students)</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+
+                  {feeForm.type === 'tuition' ? (
+                      <div className="space-y-2">
+                          <Label>Program</Label>
+                          <Select value={feeForm.program_id} onValueChange={(v) => setFeeForm({ ...feeForm, program_id: v })}>
+                              <SelectTrigger><SelectValue placeholder="Select Program" /></SelectTrigger>
+                              <SelectContent>
+                                  {programs.map((p: any) => (
+                                      <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  ) : (
+                      <div className="space-y-2 pt-8">
+                          <p className="text-xs text-muted-foreground italic">Direct costs automatically apply to all students.</p>
+                      </div>
+                  )}
+
+                  <div className="col-span-2 pt-4 pb-2 border-b">
+                      <h4 className="font-semibold text-sm">Semester Breakdown</h4>
+                      <p className="text-xs text-muted-foreground">Select which semester(s) this fee applies to.</p>
+                  </div>
+
+                  <div className="col-span-2 space-y-2 mb-4">
+                      <Label>Applicable Semester</Label>
+                      <Select value={feeForm.applicable_semester} onValueChange={(v) => setFeeForm({ ...feeForm, applicable_semester: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select Semester Coverage" /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="both">Both Semesters</SelectItem>
+                              <SelectItem value="semester_1">Semester 1 Only</SelectItem>
+                              <SelectItem value="semester_2">Semester 2 Only</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+
+                  {(feeForm.applicable_semester === 'both' || feeForm.applicable_semester === 'semester_1') && (
+                      <div className="space-y-2">
+                          <Label>Semester 1 Amount</Label>
+                          <Input type="number" value={feeForm.semester_1_amount} onChange={(e) => setFeeForm({ ...feeForm, semester_1_amount: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                  )}
+
+                  {(feeForm.applicable_semester === 'both' || feeForm.applicable_semester === 'semester_2') && (
+                      <div className="space-y-2">
+                          <Label>Semester 2 Amount</Label>
+                          <Input type="number" value={feeForm.semester_2_amount} onChange={(e) => setFeeForm({ ...feeForm, semester_2_amount: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                  )}
+
+                  <div className="col-span-2 flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                    <div>
+                      <Label className="text-base font-medium">Active Status</Label>
+                      <p className="text-xs text-muted-foreground mt-1">If inactive, this fee won't be shown to students or charged during registration.</p>
+                    </div>
+                    <Switch 
+                      checked={feeForm.is_active} 
+                      onCheckedChange={(checked) => setFeeForm({ ...feeForm, is_active: checked })} 
+                    />
+                  </div>
+
+                  <div className="col-span-2 space-y-2 mt-2">
+                      <Label>Description (Optional)</Label>
+                      <Textarea value={feeForm.description} onChange={(e) => setFeeForm({ ...feeForm, description: e.target.value })} placeholder="Details about what this fee covers..." />
+                  </div>
+              </div>
+              
+              <div className="bg-muted/30 p-4 rounded-lg flex justify-between items-center border">
+                  <span className="font-medium text-sm">Total Calculated Fee:</span>
+                  <span className="text-lg font-bold text-primary">
+                      {feeForm.currency} {((feeForm.applicable_semester === 'semester_2' ? 0 : feeForm.semester_1_amount) + (feeForm.applicable_semester === 'semester_1' ? 0 : feeForm.semester_2_amount)).toLocaleString()}
+                  </span>
+              </div>
+
+              <DialogFooter className="mt-4">
+                  <Button variant="outline" onClick={() => setIsFeeDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleSaveFee}>Save Fee</Button>
+              </DialogFooter>
+          </DialogContent>
       </Dialog>
     </div>
   );
 }
-

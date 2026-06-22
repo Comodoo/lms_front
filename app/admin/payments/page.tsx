@@ -17,6 +17,7 @@ import { Search, Download, TrendingUp, CheckCircle, DollarSign, Plus, MoreHorizo
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import Swal from 'sweetalert2';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -49,6 +50,15 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [feeSearchTerm, setFeeSearchTerm] = useState('');
+
+  // Payment Filters
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterSemester, setFilterSemester] = useState('all');
+  const [filterStudentYear, setFilterStudentYear] = useState('all');
+  const [filterProgram, setFilterProgram] = useState('all');
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Fee Form State
   const [isFeeDialogOpen, setIsFeeDialogOpen] = useState(false);
@@ -182,11 +192,38 @@ export default function AdminPaymentsPage() {
       setIsFeeDialogOpen(true);
   };
 
-  const totalRevenue = payments
+  const filteredPayments = payments.filter((p) => {
+    const paymentYear = new Date(p.created_at).getFullYear().toString();
+    if (filterYear !== 'all' && paymentYear !== filterYear) return false;
+
+    if (filterSemester !== 'all') {
+      const desc = (p.description || '').toLowerCase();
+      if (filterSemester === '1' && !desc.includes('semester 1') && !desc.includes('sem 1')) return false;
+      if (filterSemester === '2' && !desc.includes('semester 2') && !desc.includes('sem 2')) return false;
+    }
+
+    if (filterProgram !== 'all' && p.registration?.program_id?.toString() !== filterProgram) {
+      return false;
+    }
+
+    if (filterStudentYear !== 'all') {
+      const regYear = new Date(p.registration?.created_at || p.created_at).getFullYear();
+      const studentYear = (parseInt(paymentYear) - regYear) + 1;
+      if (studentYear.toString() !== filterStudentYear) return false;
+    }
+
+    return true;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const totalRevenue = filteredPayments
     .filter(p => p.status === 'completed')
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
-  const completedRegistrations = payments.filter(p => p.status === 'completed').length;
+  const completedRegistrations = filteredPayments.filter(p => p.status === 'completed').length;
 
   const filteredFees = fees.filter(
       (f) =>
@@ -230,10 +267,59 @@ export default function AdminPaymentsPage() {
 
         {/* ================= TRANSACTIONS TAB ================= */}
         <TabsContent value="transactions" className="space-y-4">
-          <div className="flex justify-end mb-4">
-            <Button variant="outline">
+          <div className="flex flex-col md:flex-row gap-4 mb-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-2 flex-wrap">
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Calendar Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filterSemester} onValueChange={setFilterSemester}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
+                  <SelectItem value="1">Semester 1</SelectItem>
+                  <SelectItem value="2">Semester 2</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterStudentYear} onValueChange={setFilterStudentYear}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Student Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Student Years</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterProgram} onValueChange={setFilterProgram}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Program" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" onClick={() => router.push('/admin/reports')}>
               <Download className="w-4 h-4 mr-2" />
-              Export Financial Report
+              Go to Reports
             </Button>
           </div>
 
@@ -273,7 +359,7 @@ export default function AdminPaymentsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-blue-600">
-                  {payments.filter(p => p.status === 'pending').length}
+                  {filteredPayments.filter(p => p.status === 'pending').length}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Outstanding invoices</p>
               </CardContent>
@@ -299,7 +385,7 @@ export default function AdminPaymentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((payment) => (
+                  {paginatedPayments.map((payment) => (
                     <TableRow key={payment.id}>
                       <TableCell className="font-medium">
                         {payment.registration ? `${payment.registration.first_name} ${payment.registration.last_name}` : 'Unknown'}
@@ -316,7 +402,7 @@ export default function AdminPaymentsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {payments.length === 0 && (
+                  {filteredPayments.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
                         No payments found
@@ -325,6 +411,29 @@ export default function AdminPaymentsPage() {
                   )}
                 </TableBody>
               </Table>
+              {totalPages > 1 && (
+                <div className="mt-4 flex justify-end">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <span className="text-sm px-4">Page {currentPage} of {totalPages}</span>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

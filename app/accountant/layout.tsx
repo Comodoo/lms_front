@@ -22,7 +22,8 @@ import {
     Menu,
     Settings,
     User,
-    Users
+    Users,
+    BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -32,8 +33,7 @@ const navigation = [
   { name: 'Dashboard', href: '/accountant/dashboard', icon: LayoutDashboard },
   { name: 'Payments', href: '/accountant/payments', icon: DollarSign },
   { name: 'Student Fees', href: '/accountant/student-fees', icon: Users },
-  { name: 'Reports', href: '/accountant/reports', icon: FileText },
-  { name: 'Settings', href: '/accountant/settings', icon: Settings },
+  { name: 'Reports', href: '/accountant/reports', icon: BarChart3 },
 ];
 
 export default function AccountantLayout({ children }: { children: React.ReactNode }) {
@@ -47,9 +47,8 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
     setMounted(true);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   if (!mounted) {
@@ -64,10 +63,10 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
           <div className="flex flex-col h-full bg-[#0D7377]">
             <div className="p-6 border-b border-white/20">
               <Link href="/accountant/dashboard" className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-white" />
+                <div className="bg-white rounded-lg p-1">
+                  <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
                 </div>
-                <span className="font-bold text-lg text-white">Finance Portal</span>
+                <span className="font-bold text-lg text-white">ZMC Finance</span>
               </Link>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -114,10 +113,10 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
         <div className="flex flex-col flex-1 bg-[#0D7377] border-r border-[#0a5f61]">
           <div className="p-6 border-b border-white/20">
             <Link href="/accountant/dashboard" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-white" />
+              <div className="bg-white rounded-lg p-1">
+                <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
               </div>
-              <span className="font-bold text-lg text-white">Finance Portal</span>
+              <span className="font-bold text-lg text-white">ZMC Finance</span>
             </Link>
           </div>
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -191,11 +190,6 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
                       <span className="text-xs text-muted-foreground">{user?.email}</span>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push('/accountant/settings')}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />

@@ -1,5 +1,5 @@
 // API Service Layer for Backend Integration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 interface ApiResponse<T> {
   data?: T;
@@ -39,6 +39,13 @@ async function apiFetch<T>(
     const data = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401 && endpoint !== '/auth/login') {
+        if (typeof window !== 'undefined') {
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = '/login';
+        }
+      }
       return { error: data.message || data.error || 'Request failed' };
     }
 
@@ -55,6 +62,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+  },
+
+  async me() {
+    return apiFetch<any>('/user', { method: 'GET' });
   },
 
   async register(data: any) {

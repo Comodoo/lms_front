@@ -23,69 +23,123 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useResults } from '@/lib/results-context';
-import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Eye, CheckCircle, XCircle, Key } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { resetStudentPassword } from '@/lib/api-client';
+import { useToast } from '@/components/ui/use-toast';
+import Swal from 'sweetalert2';
 
 export default function AdminStudentsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { getStudentProfiles, deleteStudentProfile, loading, examResults } = useResults();
+  const { toast } = useToast();
+  const { studentProfiles, deleteStudentProfile, loading, examResults } = useResults();
   const [mounted, setMounted] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [programFilter, setProgramFilter] = useState('All');
+  const [yearFilter, setYearFilter] = useState('All');
 
   useEffect(() => {
     setMounted(true);
-    loadData();
   }, []);
 
-  const loadData = async () => {
-    const data = await getStudentProfiles();
-    
+  useEffect(() => {
     // Calculate CGPA for each student based on exam results
-    const enrichedData = data.map(student => {
+    const enrichedData = studentProfiles.map(student => {
       const studentResults = examResults.filter(r => 
         String(r.studentProfileId) === String(student.id) || 
         String(r.registrationNumber) === String(student.registrationNumber)
       );
 
-      let totalCredits = 0;
       let totalPoints = 0;
 
       studentResults.forEach(r => {
-        const credit = Number(r.credits) || 0;
         const gpaPoints = Number(r.gradePoints) || 0;
-        totalCredits += credit;
-        totalPoints += (gpaPoints * credit);
+        totalPoints += gpaPoints;
       });
 
       return {
         ...student,
-        cgpa: totalCredits > 0 ? (totalPoints / totalCredits) : 0
+        cgpa: studentResults.length > 0 ? (totalPoints / studentResults.length) : 0
       };
     });
     
     setStudents(enrichedData);
-  };
-
-  // Re-calculate when examResults change
-  useEffect(() => {
-    if (students.length > 0) {
-      loadData();
-    }
-  }, [examResults]);
+  }, [studentProfiles, examResults]);
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this student?")) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       await deleteStudentProfile(id);
-      await loadData();
+      Swal.fire(
+        'Deleted!',
+        'Student profile has been deleted.',
+        'success'
+      );
     }
   };
 
-  const filteredStudents = students.filter(s => 
-    s.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.programName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleResetPassword = async (userId: string, lastName: string) => {
+    const newPassword = lastName.toLowerCase();
+    
+    const result = await Swal.fire({
+      title: 'Reset Password?',
+      text: `Are you sure you want to reset the password for this student? The new password will be "${newPassword}".`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, reset it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await resetStudentPassword(userId);
+        Swal.fire(
+          'Reset!',
+          'Student password has been reset successfully.',
+          'success'
+        );
+      } catch (error) {
+        Swal.fire(
+          'Error!',
+          'An error occurred while resetting the password.',
+          'error'
+        );
+      }
+    }
+  };
+
+  const filteredStudents = students.filter(s => {
+    const matchesSearch = s.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          s.programName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          s.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          s.lastName?.toLowerCase().includes(searchTerm.toLowerCase());
+                          
+    const matchesDepartment = departmentFilter === 'All' || s.department === departmentFilter;
+    const matchesProgram = programFilter === 'All' || s.programName === programFilter;
+    const matchesYear = yearFilter === 'All' || `Year ${s.currentYear}` === yearFilter;
+    
+    return matchesSearch && matchesDepartment && matchesProgram && matchesYear;
+  });
+
+  // Extract unique values for filters
+  const departments = ['All', ...Array.from(new Set(students.map(s => s.department).filter(Boolean)))];
+  const programs = ['All', ...Array.from(new Set(students.map(s => s.programName).filter(Boolean)))];
+  const years = ['All', ...Array.from(new Set(students.map(s => `Year ${s.currentYear}`)))];
 
   if (!mounted) return null;
 
@@ -104,20 +158,42 @@ export default function AdminStudentsPage() {
 
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by registration number, name or program..."
+                placeholder="Search by reg number, name or program..."
                 value={searchTerm || ''}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Button variant="outline">
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-            </Button>
+            
+            <div className="flex gap-2">
+              <select 
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                {departments.map(d => <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>)}
+              </select>
+
+              <select 
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background max-w-[200px] truncate"
+                value={programFilter}
+                onChange={(e) => setProgramFilter(e.target.value)}
+              >
+                {programs.map(p => <option key={p} value={p}>{p === 'All' ? 'All Courses' : p}</option>)}
+              </select>
+
+              <select 
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+              >
+                {years.map(y => <option key={y} value={y}>{y === 'All' ? 'All Years' : y}</option>)}
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -129,10 +205,10 @@ export default function AdminStudentsPage() {
               <TableRow>
                 <TableHead>Reg. Number</TableHead>
                 <TableHead>Student Name</TableHead>
-                <TableHead>Program</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Course</TableHead>
                 <TableHead>Year</TableHead>
                 <TableHead>Intake</TableHead>
-                <TableHead>GPA</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -149,14 +225,10 @@ export default function AdminStudentsPage() {
                   <TableRow key={student.id}>
                     <TableCell className="font-medium">{student.registrationNumber}</TableCell>
                     <TableCell>{student.firstName} {student.lastName}</TableCell>
+                    <TableCell>{student.department}</TableCell>
                     <TableCell>{student.programName}</TableCell>
                     <TableCell>Year {student.currentYear}</TableCell>
                     <TableCell>{student.intake}</TableCell>
-                    <TableCell>
-                      <Badge variant={student.cgpa >= 2.0 ? 'secondary' : 'destructive'} className="font-mono">
-                        {student.cgpa?.toFixed(2) || '0.00'}
-                      </Badge>
-                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         {student.status === 'active' ? (
@@ -184,13 +256,19 @@ export default function AdminStudentsPage() {
                             <Edit className="w-4 h-4 mr-2" />
                             Edit Student
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {user?.role === 'admin' && (
-                            <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(student.id)}>
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
+                          
+                          {(student.userId || student.user_id) && (
+                            <DropdownMenuItem onClick={() => handleResetPassword(student.userId || student.user_id, student.lastName)}>
+                              <Key className="w-4 h-4 mr-2" />
+                              Reset Password
                             </DropdownMenuItem>
                           )}
+                          
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(student.id)}>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

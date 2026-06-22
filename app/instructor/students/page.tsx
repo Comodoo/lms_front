@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import { useLMS } from '@/lib/lms-context';
 import { apiClient } from '@/lib/api-client';
 import { coursesApi } from '@/lib/api';
@@ -287,12 +288,13 @@ const generateRegistrationNumber = (id: string | number) => {
 
 function StudentsContent() {
   const searchParams = useSearchParams();
-  const initialCourseId = searchParams.get('course_id') || 'all';
+  const initialCourseId = searchParams?.get('course_id') || 'all';
   
-  const { currentUser, removeStudentFromCourse } = useLMS();
+  const { currentUser: lmsUser, removeStudentFromCourse } = useLMS();
+  const { user } = useAuth();
   const { getCourseOfferings, getStudentProfiles, createExamResult, loading: resultsLoading } = useResults();
   
-  const instructorId = currentUser?.id || '';
+  const instructorId = user?.id || lmsUser?.id || '';
 
   const [realStudents, setRealStudents] = useState<StudentEnrollmentInfo[]>([]);
   const [realCourses, setRealCourses] = useState<any[]>([]);
@@ -330,8 +332,8 @@ function StudentsContent() {
       cat2Score: 0,
       assignmentScore: 0,
       finalExamScore: 0,
-      instructorId: currentUser?.id || 'instructor-1',
-      instructorName: currentUser?.name || 'Dr. John Doe',
+      instructorId: user?.id || lmsUser?.id || 'instructor-1',
+      instructorName: user?.name || lmsUser?.name || 'Instructor',
     },
   });
 

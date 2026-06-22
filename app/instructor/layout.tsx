@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
   ChevronRight,
+  CreditCard,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -31,7 +32,6 @@ const navigation = [
   { name: 'Dashboard', href: '/instructor', icon: LayoutDashboard },
   { name: 'My Courses', href: '/instructor/courses', icon: GraduationCap },
   { name: 'Results', href: '/instructor/results', icon: FileText },
-  { name: 'Settings', href: '/instructor/settings', icon: Settings },
 ];
 
 export default function InstructorLayout({ children }: { children: React.ReactNode }) {
@@ -45,9 +45,8 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
     setMounted(true);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const isActivePath = (href: string) => {
@@ -61,11 +60,11 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
       <div className="p-6">
         <Link href="/instructor" className="flex items-center gap-3">
-          <div className="bg-white/20 rounded-lg p-1.5">
-            <GraduationCap className="h-6 w-6 text-white" />
+          <div className="bg-white rounded-lg p-1">
+            <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
           </div>
           <div>
-            <span className="text-lg font-bold block leading-none text-white">College LMS</span>
+            <span className="text-lg font-bold block leading-none text-white">ZMC</span>
             <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Instructor Portal</span>
           </div>
         </Link>
@@ -163,11 +162,6 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
                 <DropdownMenuItem asChild>
                   <Link href="/instructor/profile">
                     <User className="mr-2 h-4 w-4" /> Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/instructor/settings">
-                    <Settings className="mr-2 h-4 w-4" /> Settings
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

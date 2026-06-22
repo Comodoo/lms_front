@@ -155,7 +155,7 @@ export default function RegistrationsPage() {
           <Button variant="outline" onClick={() => router.push('/admin')}>
             Back
           </Button>
-          <Button onClick={() => router.push('/registration')}>
+          <Button onClick={() => router.push('/admin/registrations/new')}>
             <PlusCircle className="mr-2 h-4 w-4" />
             New Registration
           </Button>

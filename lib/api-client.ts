@@ -5,7 +5,7 @@
  * Base URL: http://localhost:8000/api
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 // Token storage
 const getToken = () => {
@@ -276,6 +276,13 @@ export async function getRegistration(id: number | string) {
       indexNumber: q.index_number,
     }))
   };
+}
+
+// ==================== USER MANAGEMENT ====================
+export async function resetStudentPassword(userId: string | number) {
+  return apiRequest(`/users/${userId}/reset-password`, {
+    method: 'POST',
+  });
 }
 
 export async function createRegistration(data: {

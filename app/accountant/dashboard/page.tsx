@@ -11,7 +11,20 @@ import {
   Receipt,
   ArrowUpRight,
   ArrowDownRight,
+  Filter
 } from 'lucide-react';
+import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { apiClient } from '@/lib/api-client';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 
 export default function AccountantDashboardPage() {
   const { user } = useAuth();
@@ -20,17 +33,27 @@ export default function AccountantDashboardPage() {
   const [statsData, setStatsData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [programs, setPrograms] = useState<any[]>([]);
+  
+  // Filters
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterSemester, setFilterSemester] = useState('all');
+  const [filterStudentYear, setFilterStudentYear] = useState('all');
+  const [filterProgram, setFilterProgram] = useState('all');
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [paymentsRes, statsRes] = await Promise.all([
+        const [paymentsRes, statsRes, programsRes] = await Promise.all([
           paymentsApi.getAll(),
-          dashboardApi.getAccountantStats()
+          dashboardApi.getAccountantStats(),
+          apiClient.getPrograms()
         ]);
         
         if (paymentsRes.data) setPayments(paymentsRes.data as any[]);
         if (statsRes.data) setStatsData(statsRes.data);
+        if (programsRes) setPrograms(programsRes as any[]);
       } catch (error) {
         console.error("Failed to load dashboard data", error);
       } finally {
@@ -41,44 +64,87 @@ export default function AccountantDashboardPage() {
     fetchData();
   }, []);
 
-  const totalPaymentsToday = statsData?.totalPaymentsToday || 0;
-  const pendingVerifications = statsData?.pendingVerifications || 0;
-  const activeStudents = statsData?.activeStudents || 0;
-  const monthlyRevenue = statsData?.monthlyRevenue || 0;
+  const filteredPayments = payments.filter((p) => {
+    const paymentYear = new Date(p.created_at).getFullYear().toString();
+    if (filterYear !== 'all' && paymentYear !== filterYear) return false;
+
+    if (filterSemester !== 'all') {
+      const desc = (p.description || '').toLowerCase();
+      if (filterSemester === '1' && !desc.includes('semester 1') && !desc.includes('sem 1')) return false;
+      if (filterSemester === '2' && !desc.includes('semester 2') && !desc.includes('sem 2')) return false;
+    }
+
+    if (filterProgram !== 'all' && p.registration?.program_id?.toString() !== filterProgram) {
+      return false;
+    }
+
+    if (filterStudentYear !== 'all') {
+      const regYear = new Date(p.registration?.created_at || p.created_at).getFullYear();
+      const studentYear = (parseInt(paymentYear) - regYear) + 1;
+      if (studentYear.toString() !== filterStudentYear) return false;
+    }
+
+    return true;
+  });
+
+  // Calculate dynamic stats
+  const dynamicRevenue = filteredPayments
+    .filter(p => p.status === 'completed')
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const dynamicPending = filteredPayments
+    .filter(p => p.status === 'pending')
+    .length;
+
+  const dynamicTotal = filteredPayments.length;
 
   const stats = [
     {
-      title: 'Total Payments Today',
-      value: `TSH ${totalPaymentsToday.toLocaleString()}`,
-      change: 'Today',
-      trend: totalPaymentsToday > 0 ? 'up' : 'down',
+      title: 'Filtered Revenue',
+      value: `TSH ${dynamicRevenue.toLocaleString()}`,
+      change: 'Based on filters',
+      trend: dynamicRevenue > 0 ? 'up' : 'down',
       icon: CreditCard,
     },
     {
       title: 'Pending Verifications',
-      value: pendingVerifications.toString(),
+      value: dynamicPending.toString(),
       change: 'Action Required',
-      trend: pendingVerifications > 0 ? 'up' : 'down',
+      trend: dynamicPending > 0 ? 'up' : 'down',
       icon: Receipt,
     },
     {
       title: 'Active Students',
-      value: activeStudents.toString(),
+      value: (statsData?.totalStudents || statsData?.activeStudents || 0).toString(),
       change: 'Total Registered',
       trend: 'up',
       icon: Users,
     },
     {
-      title: 'Monthly Revenue',
-      value: `TSH ${monthlyRevenue.toLocaleString()}`,
-      change: 'This Month',
-      trend: monthlyRevenue > 0 ? 'up' : 'down',
+      title: 'Total Filtered Payments',
+      value: dynamicTotal.toString(),
+      change: 'Matching criteria',
+      trend: 'up',
       icon: TrendingUp,
     },
   ];
 
+  // Chart Data: Group by Year
+  const chartDataMap: Record<string, number> = {};
+  filteredPayments.filter(p => p.status === 'completed').forEach(p => {
+    const year = new Date(p.created_at).getFullYear().toString();
+    chartDataMap[year] = (chartDataMap[year] || 0) + Number(p.amount);
+  });
+  
+  const chartData = Object.keys(chartDataMap)
+    .sort()
+    .map(year => ({
+      year,
+      revenue: chartDataMap[year]
+    }));
+
   // Get top 5 most recent payments
-  const recentPayments = [...payments]
+  const recentPayments = [...filteredPayments]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
     .map(p => ({
@@ -93,10 +159,59 @@ export default function AccountantDashboardPage() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Welcome, {user?.name || 'Accountant'}</h1>
           <p className="text-muted-foreground">Here&apos;s what&apos;s happening with student finances today.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={filterSemester} onValueChange={setFilterSemester}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Semester" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Semesters</SelectItem>
+              <SelectItem value="1">Semester 1</SelectItem>
+              <SelectItem value="2">Semester 2</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStudentYear} onValueChange={setFilterStudentYear}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Student Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Student Years</SelectItem>
+              <SelectItem value="1">Year 1</SelectItem>
+              <SelectItem value="2">Year 2</SelectItem>
+              <SelectItem value="3">Year 3</SelectItem>
+              <SelectItem value="4">Year 4</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterProgram} onValueChange={setFilterProgram}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Program" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Programs</SelectItem>
+              {programs.map(p => (
+                <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -127,6 +242,32 @@ export default function AccountantDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Charts Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Revenue by Year</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px] w-full">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="year" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `TSH ${(value / 1000000).toFixed(1)}M`} />
+                  <Tooltip formatter={(value) => `TSH ${Number(value).toLocaleString()}`} />
+                  <Bar dataKey="revenue" fill="#0D7377" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                No revenue data available for the selected filters.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Payments */}
       <Card>
@@ -175,19 +316,21 @@ export default function AccountantDashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Receipt className="h-6 w-6 text-primary" />
+        <Link href="/accountant/payments">
+          <Card className="bg-primary/5 border-primary/20 hover:bg-primary/10 transition-colors cursor-pointer">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Receipt className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Revenue & Payments</h3>
+                  <p className="text-sm text-muted-foreground">Monitor fees & structures</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold">Verify Cash Payments</h3>
-                <p className="text-sm text-muted-foreground">8 pending verifications</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-6">

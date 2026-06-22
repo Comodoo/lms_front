@@ -60,11 +60,12 @@ export default function StudentResultsPage() {
         };
       }
       
-      years[year].semesters[semKey].courses.push({
-        code: res.course_offering.course.code,
-        name: res.course_offering.course.name,
-        type: res.course_offering.course.type || 'Core',
-        credit: parseFloat(res.course_offering.course.credit_hours || res.course_offering.course.credits || 0),
+        const course = res.course_offering?.course;
+        years[year].semesters[semKey].courses.push({
+        code: course?.code,
+        name: course?.name,
+        type: course?.type || 'Core',
+        credit: parseFloat(course?.credit?.value || course?.credit_hours || course?.credits || 0),
         grade: res.grade,
         remarks: res.total_score >= 40 ? 'Pass' : 'Failed'
       });

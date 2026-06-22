@@ -80,12 +80,8 @@ export default function RegistrationPage() {
   const router = useRouter();
   const formInitRef = useRef(false);
 
-  // Redirect if already registered
-  useEffect(() => {
-    if (registrations && registrations.length > 0) {
-      router.push(`/registration/${registrations[0].id}/payment`);
-    }
-  }, [registrations, router]);
+  // We don't want to redirect admin if they have registrations
+  // (removed auto-redirect code that was meant for students)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(registrationSchema),
@@ -150,18 +146,9 @@ export default function RegistrationPage() {
       setCurrentStep(parseInt(savedStep, 10));
     }
 
-    if (!loadedDraft && user) {
-      const names = user.name?.split(' ') || [];
-      const firstName = names[0] || '';
-      const lastName = names.slice(1).join(' ') || '';
-      
-      form.setValue('firstName', firstName);
-      form.setValue('lastName', lastName);
-      form.setValue('email', user.email || '');
-    }
-
+    // We don't pre-fill admin's details here
     formInitRef.current = true;
-  }, [user, form]);
+  }, [form]);
 
   // Save draft on changes
   useEffect(() => {
@@ -228,10 +215,10 @@ export default function RegistrationPage() {
       // 1. Create registration record (now handles documents internally via FormData)
       const registration = await createRegistration(data as any);
 
-      // Redirect to payment
+      // Redirect to admin registrations page
       localStorage.removeItem('registration_draft');
       localStorage.removeItem('registration_step');
-      router.push(`/registration/${registration.id}/payment`);
+      router.push(`/admin/registrations`);
     } catch (error) {
       console.error('Registration failed:', error);
     }
@@ -259,8 +246,13 @@ export default function RegistrationPage() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Student Registration</h1>
-        <p className="text-muted-foreground">Complete your registration in a few simple steps</p>
+        <div className="flex items-center gap-4 mb-2">
+          <Button variant="outline" size="sm" onClick={() => router.push('/admin/registrations')}>
+            <ChevronLeft className="w-4 h-4 mr-1" /> Back
+          </Button>
+          <h1 className="text-3xl font-bold">New Student Registration</h1>
+        </div>
+        <p className="text-muted-foreground">Register a new student into the system</p>
       </div>
 
       {/* Progress Steps */}
@@ -979,7 +971,7 @@ export default function RegistrationPage() {
                   </Button>
                 ) : (
                   <Button type="submit" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting ? 'Submitting...' : 'Submit & Proceed to Payment'}
+                    {form.formState.isSubmitting ? 'Submitting...' : 'Submit Registration'}
                   </Button>
                 )}
               </div>

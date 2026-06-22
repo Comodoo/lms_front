@@ -126,7 +126,7 @@ export default function AddUserPage() {
               <Input
                 id="phone"
                 type="tel"
-                placeholder="+254..."
+                placeholder="+255..."
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />

@@ -160,33 +160,20 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-primary p-12 flex-col justify-between text-primary-foreground">
         <div>
           <div className="flex items-center gap-2">
-            <GraduationCap className="h-8 w-8" />
-            <span className="text-2xl font-bold">LearnHub</span>
+            <div className="bg-white rounded-lg p-1">
+              <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
+            </div>
+            <span className="text-2xl font-bold">ZMC</span>
           </div>
         </div>
         
         <div className="space-y-6">
           <h1 className="text-4xl font-bold leading-tight">
-            Welcome back to your learning journey
+            Welcome back to Zanzibar Metropolitan College
           </h1>
           <p className="text-lg opacity-90">
-            Access thousands of courses, track your progress, and achieve your career goals with Africa's leading learning platform.
+            Access your student portal, manage your academic progress, and achieve your career goals with ZMC's dedicated learning platform.
           </p>
-          
-          <div className="grid grid-cols-3 gap-4 pt-8">
-            <div className="text-center">
-              <div className="text-3xl font-bold">50K+</div>
-              <div className="text-sm opacity-80">Students</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">500+</div>
-              <div className="text-sm opacity-80">Courses</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">98%</div>
-              <div className="text-sm opacity-80">Satisfaction</div>
-            </div>
-          </div>
         </div>
         
         <div className="text-sm opacity-80">
@@ -199,8 +186,10 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
-            <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">LearnHub</span>
+            <div className="bg-primary rounded-lg p-1">
+              <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
+            </div>
+            <span className="text-2xl font-bold">ZMC</span>
           </div>
           
           <Card className="border-0 shadow-none lg:border lg:shadow-sm">
@@ -286,75 +275,7 @@ export default function LoginPage() {
                 </Button>
               </form>
               
-              <div className="relative my-6">
-                <Separator />
-                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-                  OR
-                </span>
-              </div>
-              
-              {/* Demo credentials */}
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium">Demo Credentials</p>
-                <div className="grid gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-2"
-                    onClick={() => {
-                      setEmail('student@example.com');
-                      setPassword('password123');
-                    }}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Student Account</span>
-                      <span className="text-xs text-muted-foreground">student@example.com</span>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-2"
-                    onClick={() => {
-                      setEmail('instructor@example.com');
-                      setPassword('password123');
-                    }}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Instructor Account</span>
-                      <span className="text-xs text-muted-foreground">instructor@example.com</span>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-2"
-                    onClick={() => {
-                      setEmail('admin@example.com');
-                      setPassword('admin123');
-                    }}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Admin Account</span>
-                      <span className="text-xs text-muted-foreground">admin@example.com</span>
-                    </div>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto py-2"
-                    onClick={() => {
-                      setEmail('accountant@example.com');
-                      setPassword('password123');
-                    }}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Accountant Account</span>
-                      <span className="text-xs text-muted-foreground">accountant@example.com</span>
-                    </div>
-                  </Button>
-                </div>
-              </div>
+
             </CardContent>
             
             <CardFooter className="px-0 lg:px-6 flex flex-col gap-4">

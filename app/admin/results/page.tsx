@@ -22,7 +22,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useResults } from '@/lib/results-context';
-import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download } from 'lucide-react';
+import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download, Settings, Info } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 export default function AdminResultsPage() {
   const router = useRouter();
@@ -33,10 +36,38 @@ export default function AdminResultsPage() {
   const [programFilter, setProgramFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [academicYearFilter, setAcademicYearFilter] = useState<string>('2024/2025');
+  const [minGpa, setMinGpa] = useState<number>(2.0);
+  const [minGpaInput, setMinGpaInput] = useState<string>('2.0');
 
   useEffect(() => {
     setMounted(true);
+    try {
+      const saved = localStorage.getItem('academic_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.minGpaForGoodStanding === 'number') {
+          setMinGpa(parsed.minGpaForGoodStanding);
+          setMinGpaInput(parsed.minGpaForGoodStanding.toString());
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
   }, []);
+
+  const handleSaveMinGpa = (val: string) => {
+    setMinGpaInput(val);
+    const newGpa = parseFloat(val);
+    if (!isNaN(newGpa)) {
+      setMinGpa(newGpa);
+      try {
+        const saved = localStorage.getItem('academic_settings');
+        let parsed = saved ? JSON.parse(saved) : {};
+        parsed.minGpaForGoodStanding = newGpa;
+        localStorage.setItem('academic_settings', JSON.stringify(parsed));
+      } catch(e) {}
+    }
+  };
 
   // Dynamically enrich students with their results from context
   const enrichedStudents = rawProfiles.map(student => {
@@ -49,17 +80,17 @@ export default function AdminResultsPage() {
       const credit = Number(r.credits) || 0;
       const gpaPoints = Number(r.gradePoints) || 0;
       totalCredits += credit;
-      totalPoints += (gpaPoints * credit);
+      totalPoints += gpaPoints; // Simple average, no credit weighting
     });
 
-    const cgpa = totalCredits > 0 ? (totalPoints / totalCredits) : 0;
+    const cgpa = studentResults.length > 0 ? (totalPoints / studentResults.length) : 0;
     
     return {
       ...student,
       cgpa: cgpa,
       totalCreditsEarned: totalCredits,
       studentResults: studentResults,
-      status: student.status === 'graduated' ? 'graduated' : (cgpa < 2.0 && totalCredits > 0 ? 'probation' : student.status)
+      status: student.status === 'graduated' ? 'graduated' : (cgpa < minGpa && totalCredits > 0 ? 'probation' : student.status)
     };
   });
 
@@ -73,8 +104,8 @@ export default function AdminResultsPage() {
     if (programFilter !== 'all' && s.programId !== programFilter) {
       return false;
     }
-    if (statusFilter === 'continue' && s.cgpa < 2.0) return false;
-    if (statusFilter === 'discontinue' && s.cgpa >= 2.0) return false;
+    if (statusFilter === 'continue' && s.cgpa < minGpa) return false;
+    if (statusFilter === 'discontinue' && s.cgpa >= minGpa) return false;
     
     // Academic Year filtering logic could be added here if needed
     return true;
@@ -84,7 +115,7 @@ export default function AdminResultsPage() {
     if (status === 'graduated') {
       return { label: 'Graduated', color: 'bg-green-100 text-green-800', icon: CheckCircle };
     }
-    if (cgpa < 2.0 || status === 'withdrawn' || status === 'suspended') {
+    if (cgpa < minGpa || status === 'withdrawn' || status === 'suspended') {
       return { label: 'Discontinued', color: 'bg-red-100 text-red-800', icon: XCircle };
     }
     return { label: 'Good Standing', color: 'bg-green-100 text-green-800', icon: CheckCircle };
@@ -94,16 +125,16 @@ export default function AdminResultsPage() {
     const student = enrichedStudents.find(s => String(s.id) === String(studentProfileId));
     if (!student || !student.studentResults || student.studentResults.length === 0) return 0;
 
-    const semStats: Record<string, { points: number, credits: number }> = {};
+    const semStats: Record<string, { points: number, courses: number }> = {};
     
     student.studentResults.forEach((r: any) => {
       // Group by academic year and semester to isolate the latest one
       const semKey = `${r.academicYear} - ${r.semester}`;
       if (!semStats[semKey]) {
-        semStats[semKey] = { points: 0, credits: 0 };
+        semStats[semKey] = { points: 0, courses: 0 };
       }
-      semStats[semKey].points += (Number(r.gradePoints) * Number(r.credits));
-      semStats[semKey].credits += Number(r.credits);
+      semStats[semKey].points += Number(r.gradePoints);
+      semStats[semKey].courses += 1;
     });
 
     // Sort to find the latest semester
@@ -111,14 +142,14 @@ export default function AdminResultsPage() {
     const latestSemKey = sortedSemKeys[sortedSemKeys.length - 1];
     
     const stats = semStats[latestSemKey];
-    return stats.credits > 0 ? (stats.points / stats.credits) : 0;
+    return stats.courses > 0 ? (stats.points / stats.courses) : 0;
   };
 
   const stats = {
     total: enrichedStudents.length,
-    goodStanding: enrichedStudents.filter(s => s.cgpa >= 2.0 && s.status !== 'graduated' && s.status !== 'withdrawn' && s.status !== 'suspended').length,
+    goodStanding: enrichedStudents.filter(s => s.cgpa >= minGpa && s.status !== 'graduated' && s.status !== 'withdrawn' && s.status !== 'suspended').length,
     probation: enrichedStudents.filter(s => s.status === 'probation').length,
-    discontinued: enrichedStudents.filter(s => s.status === 'withdrawn' || s.status === 'suspended' || s.cgpa < 2.0).length,
+    discontinued: enrichedStudents.filter(s => s.status === 'withdrawn' || s.status === 'suspended' || s.cgpa < minGpa).length,
     graduated: enrichedStudents.filter(s => s.status === 'graduated').length,
     averageCGPA: enrichedStudents.length > 0 
       ? enrichedStudents.reduce((sum, s) => sum + (s.cgpa || 0), 0) / enrichedStudents.length 
@@ -135,6 +166,38 @@ export default function AdminResultsPage() {
           <p className="text-muted-foreground">Monitor student results, GPA, and continuation status</p>
         </div>
         <div className="flex gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <Settings className="w-4 h-4 mr-2" />
+                GPA Settings
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Academic Standing</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Set the minimum GPA required for a student to remain in Good Standing.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="minGpa">Minimum GPA Threshold</Label>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      id="minGpa" 
+                      type="number" 
+                      step="0.1" 
+                      min="0" 
+                      max="5"
+                      value={minGpaInput} 
+                      onChange={(e) => handleSaveMinGpa(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" onClick={() => router.push('/admin/dashboard')}>
             Back to Dashboard
           </Button>
@@ -287,7 +350,7 @@ export default function AdminResultsPage() {
                       <TableCell>Year {student.currentYear}</TableCell>
                       <TableCell className="capitalize">{student.currentSemester}</TableCell>
                       <TableCell>
-                        <span className={`font-bold ${student.cgpa >= 2.0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <span className={`font-bold ${student.cgpa >= minGpa ? 'text-green-600' : 'text-red-600'}`}>
                           {student.cgpa?.toFixed(2) || '0.00'}
                         </span>
                       </TableCell>
@@ -334,11 +397,11 @@ export default function AdminResultsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-green-50 rounded-lg border border-green-200">
               <h4 className="font-semibold text-green-900 mb-2">Good Standing</h4>
-              <p className="text-sm text-green-800">CGPA of 2.0 or higher. Student can continue studies normally.</p>
+              <p className="text-sm text-green-800">CGPA of {minGpa.toFixed(1)} or higher. Student can continue studies normally.</p>
             </div>
             <div className="p-4 bg-red-50 rounded-lg border border-red-200">
               <h4 className="font-semibold text-red-900 mb-2">Discontinuation</h4>
-              <p className="text-sm text-red-800">CGPA lower than 2.0. Student is discontinued from the program.</p>
+              <p className="text-sm text-red-800">CGPA lower than {minGpa.toFixed(1)}. Student is discontinued from the program.</p>
             </div>
           </div>
         </CardContent>

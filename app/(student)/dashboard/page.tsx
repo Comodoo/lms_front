@@ -95,21 +95,30 @@ export default function StudentDashboard() {
   // Calculate GPA and course stats
   let totalCourses = programCoursesCount || examResults.length;
   let coursesCompleted = 0;
+  let totalCredits = 0;
   let totalGradePoints = 0;
 
   examResults.forEach((result: any) => {
     const score = Number(result.final_exam_score || result.total_score || result.finalExamScore || result.totalScore || 0);
+    const course = result.course_offering?.course;
+    const credit = Number(course?.credit?.value || course?.credit_hours || course?.credits || result.credit || 3);
+    
     if (score >= 40) coursesCompleted++; // Pass mark
     
     // Standard GPA mapping
-    if (score >= 80) totalGradePoints += 5;
-    else if (score >= 70) totalGradePoints += 4;
-    else if (score >= 60) totalGradePoints += 3;
-    else if (score >= 50) totalGradePoints += 2;
-    else if (score >= 40) totalGradePoints += 1;
+    let gradePoint = 0;
+    if (score >= 70) gradePoint = 5.0;
+    else if (score >= 60) gradePoint = 4.0;
+    else if (score >= 50) gradePoint = 3.0;
+    else if (score >= 40) gradePoint = 2.0;
+    else if (score >= 35) gradePoint = 1.0;
+    else gradePoint = 0.0;
+    
+    totalCredits += credit;
+    totalGradePoints += (gradePoint * credit);
   });
 
-  const gpa = totalCourses > 0 ? (totalGradePoints / totalCourses) : 0.0;
+  const gpa = totalCredits > 0 ? (totalGradePoints / totalCredits) : 0.0;
 
   const semesterData = [
     {
@@ -121,6 +130,12 @@ export default function StudentDashboard() {
     },
   ];
 
+  // Calculate Year of Study
+  const currentYear = new Date().getFullYear();
+  const yearDiff = currentYear - startYear + 1;
+  const yearSuffix = yearDiff === 1 ? 'st' : yearDiff === 2 ? 'nd' : yearDiff === 3 ? 'rd' : 'th';
+  const yearOfStudy = yearDiff > 0 ? `${yearDiff}${yearSuffix} Year` : '1st Year';
+
   const studentData = {
     studentId: currentRegistration?.registrationNumber || 'Pending...',
     fullName: currentRegistration ? `${currentRegistration.firstName} ${currentRegistration.lastName}` : (user?.name || 'Student'),
@@ -128,7 +143,7 @@ export default function StudentDashboard() {
     college: 'Main Campus',
     phone: currentRegistration?.phone || (user as any)?.phone || 'N/A',
     academicYear: academicYear,
-    yearOfStudy: '1st Year',
+    yearOfStudy: yearOfStudy,
     gpa: gpa,
     cgpa: gpa, // CGPA matches GPA for first year
     coursesRegistered: totalCourses,
@@ -371,8 +386,8 @@ export default function StudentDashboard() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <p className="text-lg font-bold">{studentData.yearOfStudy}</p>
-                  <Badge variant="secondary" className="mt-1 text-xs bg-green-100 text-green-700 hover:bg-green-100">
-                    Graduated Student
+                  <Badge variant="secondary" className="mt-1 text-xs bg-green-100 text-green-700 hover:bg-green-100 uppercase">
+                    {currentRegistration?.status === 'graduated' ? 'Graduated' : 'Active Student'}
                   </Badge>
                 </div>
 

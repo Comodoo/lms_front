@@ -26,7 +26,8 @@ import {
     Settings,
     User,
     UserCog,
-    Users
+    Users,
+    BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -41,7 +42,7 @@ const navigation = [
   { name: 'Registrations', href: '/admin/registrations', icon: ClipboardList },
   { name: 'Results', href: '/admin/results', icon: FileText },
   { name: 'Payments', href: '/admin/payments', icon: DollarSign },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
+  { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -55,9 +56,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setMounted(true);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const isActivePath = (href: string) => {
@@ -71,11 +71,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
       <div className="p-6">
         <Link href="/admin" className="flex items-center gap-3">
-          <div className="bg-white/20 rounded-lg p-1.5">
-            <GraduationCap className="h-6 w-6 text-white" />
+          <div className="bg-white rounded-lg p-1">
+            <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
           </div>
           <div>
-            <span className="text-lg font-bold block leading-none text-white">College LMS</span>
+            <span className="text-lg font-bold block leading-none text-white">ZMC</span>
             <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Admin Portal</span>
           </div>
         </Link>
@@ -173,11 +173,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <DropdownMenuItem asChild>
                   <Link href="/admin/profile">
                     <User className="mr-2 h-4 w-4" /> Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/admin/settings">
-                    <Settings className="mr-2 h-4 w-4" /> Settings
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

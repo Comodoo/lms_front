@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/lib/auth-context';
+import { useRegistration } from '@/lib/registration-context';
 import { cn } from '@/lib/utils';
 import {
     BookOpen,
@@ -57,6 +58,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { currentRegistration, registrations } = useRegistration();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['Academics']);
@@ -65,9 +67,8 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     setMounted(true);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const isActivePath = (href: string) => {
@@ -91,8 +92,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex items-center">
-            <span className="text-xl font-bold text-white">SRMS</span>
+          <div className="bg-white rounded-lg p-1">
+            <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
+          </div>
+          <div>
+            <span className="text-lg font-bold block leading-none text-white">ZMC</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-white/70">Student Portal</span>
           </div>
         </Link>
       </div>
@@ -219,7 +224,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             
             <div className="flex items-center gap-2">
                <span className="text-sm font-medium text-muted-foreground">Log in as:</span>
-               <span className="text-sm font-semibold">T21-03-12812</span>
+               <span className="text-sm font-semibold">{currentRegistration?.registrationNumber || registrations?.[0]?.registrationNumber || (user as any)?.registration_number || 'Pending'}</span>
             </div>
           </div>
 

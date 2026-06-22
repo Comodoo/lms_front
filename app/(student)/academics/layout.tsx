@@ -45,18 +45,6 @@ export default function AcademicsLayout({ children }: { children: React.ReactNod
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
         
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <button className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors">
-            Register Core Courses
-          </button>
-          <button className="px-4 py-2 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors">
-            Register Elective Courses
-          </button>
-          <button className="px-4 py-2 bg-orange-400 text-white text-sm font-medium rounded hover:bg-orange-500 transition-colors">
-            Register Carry Over Courses
-          </button>
-        </div>
       </div>
 
       {/* Info Banner */}

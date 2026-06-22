@@ -66,8 +66,15 @@ export default function AssessmentsPage() {
             };
           }
 
-          const credit = parseFloat(res.course_offering.course.credit_hours || res.course_offering.course.credits || 0);
+          const course = res.course_offering?.course;
+          const credit = parseFloat(course?.credit?.value || course?.credit_hours || course?.credits || 0);
+          const hasMarks = res.cat1_score != null || res.cat2_score != null || res.assignment_score != null;
           const ca = parseFloat(res.cat1_score || 0) + parseFloat(res.cat2_score || 0) + parseFloat(res.assignment_score || 0);
+
+          let remarks = 'Incomplete';
+          if (hasMarks) {
+            remarks = ca < 15 ? 'Failed' : 'Pass';
+          }
 
           semestersMap[key].courses.push({
             id: res.id,
@@ -76,7 +83,7 @@ export default function AssessmentsPage() {
             type: res.course_offering.course.type || 'Core',
             credit: credit,
             ca: ca,
-            remarks: ca >= 16 ? 'Pass' : 'Incomplete' // CA pass mark is typically 16 out of 40 (40%)
+            remarks: remarks
           });
         });
 

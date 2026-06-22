@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export default function AccountantReportsPage() {
+export default function AdminReportsPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,12 +243,12 @@ export default function AccountantReportsPage() {
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Years</SelectItem>
-              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-              ))}
-            </SelectContent>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                ))}
+              </SelectContent>
           </Select>
           
           <Select value={filterSemester} onValueChange={setFilterSemester}>

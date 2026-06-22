@@ -53,20 +53,25 @@ interface ResultsContextType {
 
 const ResultsContext = createContext<ResultsContextType | undefined>(undefined);
 
+import { useAuth } from './auth-context';
+
 export function ResultsProvider({ children }: { children: React.ReactNode }) {
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [semesterResults, setSemesterResults] = useState<SemesterResult[]>([]);
   const [courseOfferings, setCourseOfferings] = useState<CourseOffering[]>([]);
   const [studentProfiles, setStudentProfiles] = useState<StudentProfile[]>([]);
   const [loading, setLoading] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   // Load initial data
   useEffect(() => {
-    loadCourseOfferings();
-    loadStudentProfiles();
-    loadExamResults();
-    loadSemesterResults();
-  }, []);
+    if (isAuthenticated) {
+      loadCourseOfferings();
+      loadStudentProfiles();
+      loadExamResults();
+      loadSemesterResults();
+    }
+  }, [isAuthenticated]);
 
   const loadCourseOfferings = async () => {
     try {
@@ -101,13 +106,13 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
       const approvedRegistrations = rawData.filter((r: any) => r.status !== 'rejected');
       
       const realStudentProfiles: StudentProfile[] = approvedRegistrations.map((reg: any) => ({
-        id: reg.id.toString(), // The ID of the student profile (using registration ID)
+        id: reg.id?.toString(), 
         userId: reg.user_id?.toString() || '',
-        studentName: reg.user ? `${reg.user.first_name} ${reg.user.last_name}` : (reg.first_name ? `${reg.first_name} ${reg.last_name}` : 'Unknown Student'),
-        registrationId: reg.id.toString(),
-        registrationNumber: reg.registration_number || `ZMS-26-01-${String(reg.user_id || reg.id).padStart(4, '0')}`,
+        studentName: reg.user?.first_name ? `${reg.user.first_name} ${reg.user.last_name}` : (reg.first_name || reg.firstName ? `${reg.first_name || reg.firstName} ${reg.last_name || reg.lastName}` : 'Unknown Student'),
+        registrationId: reg.id?.toString(),
+        registrationNumber: reg.registration_number || reg.registrationNumber || `ZMS-26-01-${String(reg.user_id || reg.id).padStart(4, '0')}`,
         programId: reg.program_id?.toString() || '',
-        programName: reg.program_name || reg.program?.name || 'Not Assigned',
+        programName: reg.program_name || reg.programName || reg.program?.name || 'Not Assigned',
         department: reg.department || 'N/A',
         intake: reg.intake || 'Main Intake',
         studyMode: reg.studyMode || 'full_time',
@@ -200,9 +205,8 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
 
   const calculateGPA = (results: ExamResult[]): number => {
     if (results.length === 0) return 0;
-    const totalPoints = results.reduce((sum, r) => sum + r.gradePoints * r.credits, 0);
-    const totalCredits = results.reduce((sum, r) => sum + r.credits, 0);
-    return totalCredits > 0 ? totalPoints / totalCredits : 0;
+    const totalPoints = results.reduce((sum, r) => sum + r.gradePoints, 0);
+    return totalPoints / results.length;
   };
 
   const calculateCGPA = (semesterResults: SemesterResult[]): number => {
@@ -216,8 +220,11 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
     
     try {
       await apiClient.createExamResult({
-        student_id: parseInt(data.studentProfileId),
+        registration_number: data.registrationNumber,
+        student_id: data.userId ? parseInt(data.userId) : null,
         course_offering_id: parseInt(data.courseOfferingId),
+        academic_year: data.academicYear,
+        semester: data.semester,
         cat1_score: data.cat1Score,
         cat2_score: data.cat2Score,
         assignment_score: data.assignmentScore,

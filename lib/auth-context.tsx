@@ -25,6 +25,7 @@ export interface AuthUser {
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
   preferences: UserPreferences;
+  registration_number?: string;
 }
 
 export interface UserPreferences {
@@ -189,6 +190,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         error: null,
       });
+
+      // Background fetch to ensure user profile is fresh
+      if (typeof window !== 'undefined') {
+        authApi.me().then(res => {
+          if (res.data) {
+            setState(prev => {
+              if (!prev.user) return prev;
+              const updatedUser = {
+                ...prev.user,
+                registration_number: res.data.registration_number
+              };
+              localStorage.setItem('lms-auth', JSON.stringify({ user: updatedUser }));
+              return { ...prev, user: updatedUser as AuthUser };
+            });
+          }
+        }).catch(err => console.error("Failed to fetch fresh user data", err));
+      }
     } else {
       setState(prev => ({ ...prev, isLoading: false }));
     }
@@ -206,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.login(email, password);
       
       if (response.error) {
-        setState(prev => ({ ...prev, isLoading: false, error: response.error }));
+        setState(prev => ({ ...prev, isLoading: false, error: response.error || null }));
         return { success: false, message: response.error };
       }
 
@@ -229,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isLocked: false,
           twoFactorEnabled: false,
           preferences: defaultPreferences,
+          registration_number: backendUser.registration_number,
         };
 
         setState({
@@ -257,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authApi.register(data);
       
       if (response.error) {
-        setState(prev => ({ ...prev, isLoading: false, error: response.error }));
+        setState(prev => ({ ...prev, isLoading: false, error: response.error || null }));
         return { success: false, message: response.error };
       }
 
@@ -285,9 +304,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading: false,
       error: null,
     });
-    localStorage.removeItem('lms-auth');
-    localStorage.removeItem('auth_token');
+    
+    // Fully kill the session
+    localStorage.clear();
+    sessionStorage.clear();
     setPendingTwoFactorUser(null);
+    
+    // Force a hard reload to the login page to clear all memory state
+    window.location.href = '/login';
   }, []);
 
   const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; message: string }> => {

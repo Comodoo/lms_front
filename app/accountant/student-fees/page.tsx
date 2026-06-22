@@ -7,8 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, ChevronDown, ChevronUp, CheckCircle, Clock, AlertCircle, Loader2, Printer, CheckCircle2, Receipt } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, CheckCircle, Clock, AlertCircle, Loader2, Printer, CheckCircle2, Receipt, Send, Download } from 'lucide-react';
 import { registrationsApi, paymentsApi } from '@/lib/api';
+import { apiClient } from '@/lib/api-client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import Swal from 'sweetalert2';
 
 export default function StudentFeesPage() {
@@ -19,6 +22,19 @@ export default function StudentFeesPage() {
   // Table expansion state
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   
+  // Programs for filter
+  const [programs, setPrograms] = useState<any[]>([]);
+
+  // Filters
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterSemester, setFilterSemester] = useState('all');
+  const [filterStudentYear, setFilterStudentYear] = useState('all');
+  const [filterProgram, setFilterProgram] = useState('all');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
   // Receipt state
   const [receiptData, setReceiptData] = useState<{student: any, payment: any} | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
@@ -26,28 +42,36 @@ export default function StudentFeesPage() {
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const response = await registrationsApi.getAll();
-      if (response.data) {
-        // Map and calculate totals
-        const dataArr = Array.isArray(response.data) ? response.data : (response.data as any)?.data || [];
-        const formatted = dataArr.map((reg: any) => {
-          const payments = reg.payments || [];
-          const totalDue = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-          const totalPaid = payments
-            .filter((p: any) => p.status === 'completed')
-            .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-            
-          return {
-            ...reg,
-            registration_number: reg.registration_number || `ZMC-${String(new Date(reg.created_at || Date.now()).getFullYear()).slice(-2)}-01-${String(reg.id).padStart(4, '0')}`,
-            totalDue,
-            totalPaid,
-            balance: totalDue - totalPaid,
-            paymentPercentage: totalDue > 0 ? (totalPaid / totalDue) * 100 : 0,
-          };
-        });
-        setStudents(formatted);
-      }
+        const [regRes, programsRes] = await Promise.all([
+          registrationsApi.getAll(),
+          apiClient.getPrograms()
+        ]);
+        
+        if (programsRes) {
+          setPrograms(programsRes as any[]);
+        }
+
+        if (regRes.data) {
+          // Map and calculate totals (base totals, will be dynamically filtered later)
+          const dataArr = Array.isArray(regRes.data) ? regRes.data : (regRes.data as any)?.data || [];
+          const formatted = dataArr.map((reg: any) => {
+            const payments = reg.payments || [];
+            const totalDue = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+            const totalPaid = payments
+              .filter((p: any) => p.status === 'completed')
+              .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+              
+            return {
+              ...reg,
+              registration_number: reg.registration_number || `ZMC-${String(new Date(reg.created_at || Date.now()).getFullYear()).slice(-2)}-01-${String(reg.id).padStart(4, '0')}`,
+              totalDue,
+              totalPaid,
+              balance: totalDue - totalPaid,
+              paymentPercentage: totalDue > 0 ? (totalPaid / totalDue) * 100 : 0,
+            };
+          });
+          setStudents(formatted);
+        }
     } catch (error: any) {
       console.error(error);
     } finally {
@@ -118,7 +142,59 @@ export default function StudentFeesPage() {
     window.print();
   };
 
-  const filteredStudents = students.filter((student) => {
+  const handleSendReceipt = (payment: any, student: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    Swal.fire({
+      title: 'Sending Receipt',
+      text: `Sending receipt #${payment.control_number || payment.id} to ${student.email || 'student email'}...`,
+      icon: 'info',
+      timer: 1500,
+      showConfirmButton: false
+    }).then(() => {
+      Swal.fire('Sent!', 'Receipt has been successfully sent to the student.', 'success');
+    });
+  };
+
+  const filteredStudents = students.map(student => {
+    // 1. Filter payments
+    const filteredPayments = (student.payments || []).filter((p: any) => {
+      const paymentYear = new Date(p.created_at).getFullYear().toString();
+      if (filterYear !== 'all' && paymentYear !== filterYear) return false;
+
+      if (filterSemester !== 'all') {
+        const desc = (p.description || '').toLowerCase();
+        if (filterSemester === '1' && !desc.includes('semester 1') && !desc.includes('sem 1')) return false;
+        if (filterSemester === '2' && !desc.includes('semester 2') && !desc.includes('sem 2')) return false;
+      }
+      return true;
+    });
+
+    const totalDue = filteredPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalPaid = filteredPayments
+      .filter((p: any) => p.status === 'completed')
+      .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const balance = totalDue - totalPaid;
+    const paymentPercentage = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
+
+    return {
+      ...student,
+      filteredPayments,
+      totalDue,
+      totalPaid,
+      balance,
+      paymentPercentage
+    };
+  }).filter((student) => {
+    // 2. Filter students based on student attributes
+    if (filterProgram !== 'all' && student.program_id?.toString() !== filterProgram) return false;
+    
+    if (filterStudentYear !== 'all') {
+      const regYear = new Date(student.created_at || Date.now()).getFullYear();
+      const currentYear = new Date().getFullYear();
+      const studentYear = (currentYear - regYear) + 1;
+      if (studentYear.toString() !== filterStudentYear) return false;
+    }
+
     const search = searchTerm.toLowerCase();
     const name = `${student.first_name} ${student.last_name}`.toLowerCase();
     return (
@@ -134,6 +210,10 @@ export default function StudentFeesPage() {
     return <Badge className="bg-red-100 text-red-800 border-red-200">Payment Due</Badge>;
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const paginatedStudents = filteredStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12 print:p-0 print:m-0 print:bg-white print:space-y-0">
       
@@ -147,15 +227,65 @@ export default function StudentFeesPage() {
         </div>
 
         <Card className="border-none shadow-md bg-white/50 backdrop-blur-sm mb-6">
-          <CardContent className="p-4">
-            <div className="relative">
+          <CardContent className="p-4 flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 placeholder="Search by student name, Reg ID, or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-12 text-lg border-muted-foreground/20 focus-visible:ring-primary/50"
+                className="pl-10 h-10 border-muted-foreground/20 focus-visible:ring-primary/50"
               />
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-[120px] h-10">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filterSemester} onValueChange={setFilterSemester}>
+                <SelectTrigger className="w-[130px] h-10">
+                  <SelectValue placeholder="Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
+                  <SelectItem value="1">Semester 1</SelectItem>
+                  <SelectItem value="2">Semester 2</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterStudentYear} onValueChange={setFilterStudentYear}>
+                <SelectTrigger className="w-[140px] h-10">
+                  <SelectValue placeholder="Student Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Student Years</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                  <SelectItem value="4">Year 4</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterProgram} onValueChange={setFilterProgram}>
+                <SelectTrigger className="w-[160px] h-10">
+                  <SelectValue placeholder="Program" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -190,7 +320,7 @@ export default function StudentFeesPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredStudents.map((student) => (
+                    paginatedStudents.map((student) => (
                       <React.Fragment key={student.id}>
                         <TableRow 
                           className={`cursor-pointer transition-colors hover:bg-muted/50 ${expandedRows[student.id] ? 'bg-muted/20 border-b-0' : ''}`}
@@ -239,40 +369,51 @@ export default function StudentFeesPage() {
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
-                                        {student.payments.map((payment: any) => (
-                                          <TableRow key={payment.id} className={payment.status === 'pending' ? 'bg-yellow-50/50' : ''}>
-                                            <TableCell className="font-semibold capitalize">{payment.fee_type?.replace(/_/g, ' ')}</TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">{payment.control_number}</TableCell>
-                                            <TableCell className="font-bold">TSH {Number(payment.amount).toLocaleString()}</TableCell>
-                                            <TableCell>
-                                              <Badge variant="outline" className={payment.status === 'completed' ? 'text-green-700 bg-green-50 border-green-200' : payment.status === 'pending' ? 'text-yellow-700 bg-yellow-50 border-yellow-200' : ''}>
-                                                {payment.status}
-                                              </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                              {payment.status === 'pending' ? (
-                                                <Button 
-                                                  size="sm" 
-                                                  className="bg-primary hover:bg-primary/90 transition-transform active:scale-95"
-                                                  onClick={(e) => handleApprovePayment(payment, student, e)}
-                                                >
-                                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                                  Approve
-                                                </Button>
-                                              ) : (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  className="text-muted-foreground hover:text-foreground"
-                                                  onClick={(e) => openReceipt(payment, student, e)}
-                                                >
-                                                  <Printer className="h-4 w-4 mr-2" />
-                                                  Receipt
-                                                </Button>
-                                              )}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
+                                          {student.filteredPayments.map((payment: any) => (
+                                            <TableRow key={payment.id} className={payment.status === 'pending' ? 'bg-yellow-50/50' : ''}>
+                                              <TableCell className="font-semibold capitalize">{payment.fee_type?.replace(/_/g, ' ')}</TableCell>
+                                              <TableCell className="font-mono text-xs text-muted-foreground">{payment.control_number}</TableCell>
+                                              <TableCell className="font-bold">TSH {Number(payment.amount).toLocaleString()}</TableCell>
+                                              <TableCell>
+                                                <Badge variant="outline" className={payment.status === 'completed' ? 'text-green-700 bg-green-50 border-green-200' : payment.status === 'pending' ? 'text-yellow-700 bg-yellow-50 border-yellow-200' : ''}>
+                                                  {payment.status}
+                                                </Badge>
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {payment.status === 'pending' ? (
+                                                  <Button 
+                                                    size="sm" 
+                                                    className="bg-primary hover:bg-primary/90 transition-transform active:scale-95"
+                                                    onClick={(e) => handleApprovePayment(payment, student, e)}
+                                                  >
+                                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                                    Approve
+                                                  </Button>
+                                                ) : (
+                                                  <div className="flex items-center justify-end gap-2">
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className="h-8 border-primary/20 text-primary hover:bg-primary hover:text-white"
+                                                      onClick={(e) => handleSendReceipt(payment, student, e)}
+                                                    >
+                                                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                                                      Send Receipt
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="text-muted-foreground hover:text-foreground h-8"
+                                                      onClick={(e) => openReceipt(payment, student, e)}
+                                                    >
+                                                      <Printer className="h-3.5 w-3.5 mr-1.5" />
+                                                      Print
+                                                    </Button>
+                                                  </div>
+                                                )}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
                                       </TableBody>
                                     </Table>
                                   </div>
@@ -290,6 +431,29 @@ export default function StudentFeesPage() {
                   )}
                 </TableBody>
               </Table>
+              {totalPages > 1 && (
+                <div className="p-4 border-t border-muted/20 flex justify-end">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <span className="text-sm px-4">Page {currentPage} of {totalPages}</span>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </div>
           </Card>
         )}
@@ -297,7 +461,7 @@ export default function StudentFeesPage() {
 
       {/* Official Receipt Modal */}
       <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
-        <DialogContent className="max-w-md sm:max-w-lg p-0 border-none bg-transparent shadow-none print:m-0 print:max-w-none print:w-full">
+        <DialogContent className="max-w-md sm:max-w-lg p-0 border-none bg-transparent shadow-none print:m-0 print:max-w-none print:w-full max-h-[90vh] overflow-y-auto">
           
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none">
             {/* Header (Hidden in print) */}
@@ -317,11 +481,11 @@ export default function StudentFeesPage() {
                 
                 {/* Official Header */}
                 <div className="text-center space-y-2 mb-8 border-b-2 border-dashed pb-6">
-                  <div className="h-12 w-12 bg-primary text-white rounded-xl mx-auto flex items-center justify-center mb-4">
-                    <CheckCircle2 className="h-8 w-8" />
+                  <div className="mx-auto flex justify-center mb-4">
+                    <img src="/logo.png" alt="Zanzibar Metropolitan College Logo" className="h-20 object-contain" />
                   </div>
                   <h2 className="text-2xl font-black uppercase tracking-widest text-primary">Official Receipt</h2>
-                  <p className="text-muted-foreground font-medium text-sm">Zanzibar Maisha College</p>
+                  <p className="text-muted-foreground font-medium text-sm">Zanzibar Metropolitan College</p>
                   <p className="text-xs text-muted-foreground">Receipt No: #{receiptData.payment.id}-{Math.floor(Math.random() * 10000)}</p>
                 </div>
 

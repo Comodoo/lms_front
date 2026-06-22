@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { coursesApi } from '@/lib/api';
 import { apiClient } from '@/lib/api-client';
 import { useLMS } from '@/lib/lms-context';
+import { useAuth } from '@/lib/auth-context';
 import { useResults } from '@/lib/results-context';
 import {
     BookOpen,
@@ -37,7 +38,7 @@ interface Course {
 }
 
 export default function InstructorDashboard() {
-  const { currentUser } = useLMS();
+  const { user } = useAuth();
   const { examResults } = useResults();
   const [courses, setCourses] = useState<Course[]>([]);
   const [studentsCount, setStudentsCount] = useState(0);
@@ -143,7 +144,7 @@ export default function InstructorDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Welcome back, {currentUser?.name?.split(' ')[0] || 'Instructor'}!</h1>
+          <h1 className="text-3xl font-bold">Welcome back, {user?.name?.split(' ')[0] || 'Instructor'}!</h1>
           <p className="text-muted-foreground mt-1">
             Here&apos;s what&apos;s happening with your students and results
           </p>

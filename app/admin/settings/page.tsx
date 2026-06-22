@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,8 +101,27 @@ export default function AdminSettingsPage() {
     lowBalanceAlert: true,
   });
 
+  // Academic Settings
+  const [academicSettings, setAcademicSettings] = useState({
+    minGpaForGoodStanding: 2.0,
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem('academic_settings');
+    if (saved) {
+      try {
+        setAcademicSettings(JSON.parse(saved));
+      } catch (e) {
+        // ignore error
+      }
+    }
+  }, []);
+
   const handleSave = async () => {
     setIsSaving(true);
+    // Save to local storage for now
+    localStorage.setItem('academic_settings', JSON.stringify(academicSettings));
+    
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsSaving(false);
@@ -172,6 +191,10 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" />
             Notifications
+          </TabsTrigger>
+          <TabsTrigger value="academic" className="gap-2">
+            <BookOpen className="h-4 w-4" />
+            Academic
           </TabsTrigger>
         </TabsList>
 
@@ -844,6 +867,33 @@ export default function AdminSettingsPage() {
                   checked={notificationSettings.lowBalanceAlert}
                   onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, lowBalanceAlert: checked })}
                 />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Academic Settings */}
+        <TabsContent value="academic" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Academic Rules</CardTitle>
+              <CardDescription>Configure rules for student progression and continuation</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Minimum CGPA for Good Standing</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={academicSettings.minGpaForGoodStanding}
+                  onChange={(e) => setAcademicSettings({ ...academicSettings, minGpaForGoodStanding: parseFloat(e.target.value) || 0 })}
+                  className="max-w-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Students with a CGPA below this value will be marked for discontinuation or probation.
+                </p>
               </div>
             </CardContent>
           </Card>

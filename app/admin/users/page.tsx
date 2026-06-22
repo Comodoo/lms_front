@@ -381,7 +381,7 @@ export default function AdminUsersPage() {
                     id="phone"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+254712345678"
+                    placeholder="+255712345678"
                   />
                 </div>
                 <div className="flex items-center space-x-2">

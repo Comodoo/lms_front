@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import * as XLSX from 'xlsx';
 import {
   Table,
   TableBody,
@@ -33,12 +34,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useAuth } from '@/lib/auth-context';
 import { useResults } from '@/lib/results-context';
 import { Plus, Eye, Edit, Trash2, CheckCircle2, XCircle, Search, Filter, Upload } from 'lucide-react';
 import type { ExamResult } from '@/lib/college-types';
 
 const resultSchema = z.object({
   studentProfileId: z.string().min(1),
+  userId: z.string().optional(),
   registrationNumber: z.string().min(1),
   studentName: z.string().min(1),
   academicYear: z.string().min(1),
@@ -60,6 +63,9 @@ type ResultFormValues = z.infer<typeof resultSchema>;
 export default function InstructorResultsPage() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const courseId = searchParams.get('course_id');
+  const { user } = useAuth();
   const { examResults, courseOfferings, studentProfiles, createExamResult, updateExamResult, deleteExamResult, submitExamResult, calculateGrade, loading } = useResults();
 
   useEffect(() => {
@@ -69,7 +75,7 @@ export default function InstructorResultsPage() {
   const [filteredResults, setFilteredResults] = useState<ExamResult[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>('all');
   const [selectedResult, setSelectedResult] = useState<ExamResult | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -93,20 +99,29 @@ export default function InstructorResultsPage() {
       cat2Score: 0,
       assignmentScore: 0,
       finalExamScore: 0,
-      instructorId: 'instructor-1',
-      instructorName: 'Dr. John Doe',
+      instructorId: user?.id || 'instructor-1',
+      instructorName: user?.name || 'Instructor',
     },
   });
 
+  const course = courseOfferings.find(c => c.id === courseId);
+
+  const [courseFilter, setCourseFilter] = useState<string>('all');
+
   useEffect(() => {
     let filtered = examResults || [];
+
+    if (courseId) {
+      filtered = filtered.filter(r => r.courseOfferingId === courseId);
+    } else if (courseFilter !== 'all') {
+      filtered = filtered.filter(r => r.courseOfferingId === courseFilter);
+    }
 
     if (searchTerm) {
       filtered = filtered.filter(
         (r) =>
           r.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          r.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          r.courseCode.toLowerCase().includes(searchTerm.toLowerCase())
+          r.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -114,12 +129,12 @@ export default function InstructorResultsPage() {
       filtered = filtered.filter((r) => r.status === statusFilter);
     }
 
-    if (courseFilter !== 'all') {
-      filtered = filtered.filter((r) => r.courseOfferingId === courseFilter);
+    if (yearFilter !== 'all') {
+      filtered = filtered.filter((r) => r.academicYear === yearFilter);
     }
 
     setFilteredResults(filtered);
-  }, [examResults, searchTerm, statusFilter, courseFilter]);
+  }, [examResults, searchTerm, statusFilter, yearFilter, courseId, courseFilter]);
 
   const onSubmit = async (data: ResultFormValues) => {
     if (isEditing && selectedResult) {
@@ -138,6 +153,7 @@ export default function InstructorResultsPage() {
     setIsEditing(true);
     form.reset({
       studentProfileId: result.studentProfileId,
+      userId: studentProfiles.find(s => s.id === result.studentProfileId)?.userId || '',
       registrationNumber: result.registrationNumber,
       studentName: result.studentName,
       academicYear: result.academicYear,
@@ -155,6 +171,30 @@ export default function InstructorResultsPage() {
     });
     setDialogOpen(true);
   };
+  
+  const handleAddResult = () => {
+    setIsEditing(false);
+    form.reset({
+      studentProfileId: '',
+      userId: '',
+      registrationNumber: '',
+      studentName: '',
+      academicYear: '2025/2026',
+      semester: 'first',
+      courseOfferingId: course?.id || '',
+      courseCode: course?.code || '',
+      courseName: course?.name || '',
+      credits: course?.credits || 3,
+      cat1Score: 0,
+      cat2Score: 0,
+      assignmentScore: 0,
+      finalExamScore: 0,
+      instructorId: user?.id || 'instructor-1',
+      instructorName: user?.name || 'Instructor',
+    });
+    setDialogOpen(true);
+  };
+
 
   const handleDelete = async () => {
     if (selectedResult) {
@@ -180,17 +220,108 @@ export default function InstructorResultsPage() {
   const handleStudentChange = (studentId: string) => {
     const student = studentProfiles.find(s => s.id === studentId);
     if (student) {
+      form.setValue('userId', student.userId);
       form.setValue('registrationNumber', student.registrationNumber);
       form.setValue('studentName', student.studentName || 'Unknown Student');
     }
   };
 
-  const handleBulkUpload = async () => {
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setIsUploading(true);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsUploading(false);
-    setUploadDialogOpen(false);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json<any>(worksheet);
+
+        for (const row of json) {
+          const regNum = row['Registration Number'];
+          if (!regNum) continue;
+
+          // Find student by registration number
+          const student = studentProfiles.find(s => s.registrationNumber === regNum);
+          if (!student) continue;
+
+          // Look for an existing result
+          const targetCourseId = courseId || courseFilter !== 'all' ? courseFilter : '';
+          const existingResult = examResults.find(r => r.registrationNumber === regNum && r.courseOfferingId === targetCourseId);
+          
+          const cat1 = Number(row['CAT 1'] || 0);
+          const cat2 = Number(row['CAT 2'] || 0);
+          const assignment = Number(row['Assignment'] || 0);
+          const finalExam = Number(row['Final Exam'] || 0);
+
+          const resultData = {
+            studentProfileId: student.id,
+            userId: student.userId,
+            registrationNumber: student.registrationNumber,
+            studentName: student.studentName || `${student.firstName} ${student.lastName}`,
+            academicYear: '2025/2026',
+            semester: 'first' as 'first' | 'second' | 'summer',
+            courseOfferingId: course?.id || courseFilter !== 'all' ? courseFilter : '',
+            courseCode: course?.code || '',
+            courseName: course?.name || '',
+            credits: course?.credits || 3,
+            cat1Score: cat1,
+            cat2Score: cat2,
+            assignmentScore: assignment,
+            finalExamScore: finalExam,
+            instructorId: user?.id || 'instructor-1',
+            instructorName: user?.name || 'Instructor',
+          };
+
+          if (existingResult && existingResult.status === 'draft') {
+            await updateExamResult(existingResult.id, resultData);
+          } else if (!existingResult) {
+            await createExamResult(resultData);
+          }
+        }
+        setIsUploading(false);
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error(error);
+      setIsUploading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const targetCourseId = courseId || (courseFilter !== 'all' ? courseFilter : '');
+    const activeCourse = courseOfferings.find(c => c.id === targetCourseId);
+    
+    if (!activeCourse) {
+      // Could show a toast telling them to select a course first
+      return;
+    }
+    
+    // Filter students registered for this specific program/department (Basic logic based on available context)
+    // Note: We might just want all students or only students with an active registration.
+    // Here we'll grab students who either already have a result, or are generally available.
+    // A better approach would be mapping student's program to this course.
+    const relevantStudents = studentProfiles; 
+    
+    const data = relevantStudents.map(s => {
+      const existing = examResults.find(r => r.registrationNumber === s.registrationNumber && r.courseOfferingId === targetCourseId);
+      return {
+        'Registration Number': s.registrationNumber,
+        'Student Name': s.studentName || `${s.firstName} ${s.lastName}`,
+        'CAT 1': existing?.cat1Score || 0,
+        'CAT 2': existing?.cat2Score || 0,
+        'Assignment': existing?.assignmentScore || 0,
+        'Final Exam': existing?.finalExamScore || 0,
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+    XLSX.writeFile(workbook, `${activeCourse.code}_Results_Template.xlsx`);
   };
 
   const getStatusBadge = (status: string) => {
@@ -225,6 +356,11 @@ export default function InstructorResultsPage() {
     return colors[grade] || 'bg-gray-100 text-gray-800';
   };
 
+  const targetCourseIdForStats = courseId || (courseFilter !== 'all' ? courseFilter : '');
+  const courseResults = targetCourseIdForStats 
+    ? examResults.filter(r => r.courseOfferingId === targetCourseIdForStats)
+    : examResults;
+
   if (!mounted) return null;
 
   return (
@@ -232,7 +368,40 @@ export default function InstructorResultsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Exam Results Management</h1>
-          <p className="text-muted-foreground">Manage student exam results</p>
+          <p className="text-muted-foreground">
+            {courseId || courseFilter !== 'all' ? (
+              <>Manage student exam results for <span className="font-semibold">{courseOfferings.find(c => c.id === (courseId || courseFilter))?.code} - {courseOfferings.find(c => c.id === (courseId || courseFilter))?.name}</span></>
+            ) : (
+              'Manage and view all student exam results'
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {(!courseId && courseFilter === 'all') ? null : (
+            <>
+              <Button variant="outline" onClick={handleExportCSV}>
+                <Upload className="w-4 h-4 mr-2" />
+                Export Template
+              </Button>
+              <div className="relative">
+                <Button variant="outline" disabled={isUploading}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {isUploading ? 'Importing...' : 'Import CSV'}
+                </Button>
+                <input 
+                  type="file" 
+                  accept=".csv,.xlsx" 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={handleBulkUpload}
+                  disabled={isUploading}
+                />
+              </div>
+            </>
+          )}
+          <Button onClick={handleAddResult}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Result
+          </Button>
         </div>
       </div>
 
@@ -243,7 +412,7 @@ export default function InstructorResultsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Results</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{examResults.length}</div>
+            <div className="text-2xl font-bold">{courseResults.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -252,7 +421,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {examResults.filter(r => r.status === 'draft').length}
+              {courseResults.filter(r => r.status === 'draft').length}
             </div>
           </CardContent>
         </Card>
@@ -262,7 +431,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {examResults.filter(r => r.status === 'submitted' || r.status === 'published').length}
+              {courseResults.filter(r => r.status === 'submitted' || r.status === 'published').length}
             </div>
           </CardContent>
         </Card>
@@ -272,7 +441,7 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {examResults.filter(r => r.status === 'approved').length}
+              {courseResults.filter(r => r.status === 'approved').length}
             </div>
           </CardContent>
         </Card>
@@ -306,17 +475,29 @@ export default function InstructorResultsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={courseFilter} onValueChange={setCourseFilter}>
+              {!courseId && (
+                <Select value={courseFilter} onValueChange={setCourseFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Courses</SelectItem>
+                    {courseOfferings.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.code} - {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={yearFilter} onValueChange={setYearFilter}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by course" />
+                  <SelectValue placeholder="Filter by year" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Courses</SelectItem>
-                  {courseOfferings.map((course) => (
-                    <SelectItem key={course.id} value={course.id}>
-                      {course.code}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="all">All Years</SelectItem>
+                  <SelectItem value="2025/2026">2025/2026</SelectItem>
+                  <SelectItem value="2024/2025">2024/2025</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -471,7 +652,7 @@ export default function InstructorResultsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Course</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); handleCourseChange(value); }} defaultValue={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); handleCourseChange(value); }} defaultValue={field.value} disabled={!!courseId}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select course" />

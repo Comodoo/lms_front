@@ -469,6 +469,10 @@ export async function publishExamResult(id: number | string) {
   return apiRequest(`/exam-results/${id}/publish`, { method: 'POST' });
 }
 
+export async function submitExamResult(id: number | string) {
+  return apiRequest(`/exam-results/${id}/submit`, { method: 'POST' });
+}
+
 export async function getStudentResults(studentId?: number | string) {
   if (studentId) {
     return apiRequest(`/students/${studentId}/results`);
@@ -536,6 +540,7 @@ export const apiClient = {
   createExamResult,
   updateExamResult,
   deleteExamResult,
+  submitExamResult,
   publishExamResult,
   getStudentResults,
   getCourseResults,

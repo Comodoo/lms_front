@@ -167,6 +167,7 @@ export interface StudentProfile {
   registrationId: string;
   registrationNumber: string;
   studentName?: string;
+  gender?: string;
   programId: string;
   programName: string;
   department: string;
@@ -179,6 +180,7 @@ export interface StudentProfile {
   cgpa?: number;
   totalCreditsEarned: number;
   status: 'active' | 'probation' | 'suspended' | 'graduated' | 'withdrawn';
+  remark?: string;
   advisorId?: string; // Assigned instructor
   createdAt: Date;
   updatedAt: Date;

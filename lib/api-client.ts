@@ -205,14 +205,38 @@ export async function deleteProgram(id: number | string) {
 
 // ==================== REGISTRATIONS ====================
 
-export async function getRegistrations(status?: string) {
-  const params = status ? `?status=${status}` : '';
-  const data = await apiRequest<any[]>(`/registrations${params}`);
-  
-  if (!Array.isArray(data)) {
-    return [];
+// Fetches every page of a paginated endpoint, returning a bare array so
+// existing callers keep working while payloads stay bounded per request.
+async function fetchAllPages(endpoint: string, perPage = 200): Promise<any[]> {
+  const out: any[] = [];
+  let page = 1;
+
+  for (;;) {
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const body = await apiRequest<any>(
+      `${endpoint}${sep}page=${page}&per_page=${perPage}`
+    );
+
+    if (body && Array.isArray(body.data)) {
+      out.push(...body.data);
+      const lastPage = body.last_page ?? 1;
+      if (page >= lastPage) break;
+    } else if (Array.isArray(body)) {
+      out.push(...body);
+      break;
+    } else {
+      break;
+    }
+
+    page += 1;
   }
-  
+
+  return out;
+}
+
+export async function getRegistrations(status?: string) {
+  const data = await fetchAllPages(status ? `/registrations?status=${status}` : '/registrations');
+
   return data.map(reg => ({
     ...reg,
     firstName: reg.first_name,
@@ -372,7 +396,7 @@ export async function getPayments(params?: { status?: string; registration_id?: 
   if (params?.registration_id) queryParams.append('registration_id', String(params.registration_id));
 
   const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  return apiRequest(`/payments${query}`);
+  return fetchAllPages(`/payments${query}`);
 }
 
 export async function getPayment(id: number | string) {
@@ -426,7 +450,7 @@ export async function getExamResults(params?: {
   if (params?.status) queryParams.append('status', params.status);
 
   const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  return apiRequest(`/exam-results${query}`);
+  return fetchAllPages(`/exam-results${query}`);
 }
 
 export async function getExamResult(id: number | string) {
@@ -471,6 +495,13 @@ export async function publishExamResult(id: number | string) {
 
 export async function submitExamResult(id: number | string) {
   return apiRequest(`/exam-results/${id}/submit`, { method: 'POST' });
+}
+
+export async function rejectExamResult(id: number | string, reason: string) {
+  return apiRequest(`/exam-results/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
 }
 
 export async function getStudentResults(studentId?: number | string) {
@@ -542,6 +573,7 @@ export const apiClient = {
   deleteExamResult,
   submitExamResult,
   publishExamResult,
+  rejectExamResult,
   getStudentResults,
   getCourseResults,
 

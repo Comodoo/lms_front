@@ -28,6 +28,7 @@ interface ResultsContextType {
   submitExamResult: (id: string) => Promise<void>;
   approveExamResult: (id: string) => Promise<void>;
   rejectExamResult: (id: string, reason: string) => Promise<void>;
+  refreshExamResults: () => Promise<void>;
   
   // Semester Results
   createSemesterResult: (data: any) => Promise<SemesterResult>;
@@ -169,6 +170,10 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         instructorName: r.instructor?.name || r.instructor_name || 'Instructor',
         submittedBy: r.submitted_by?.toString() || '',
         submittedAt: r.submitted_at ? new Date(r.submitted_at) : undefined,
+        approvedBy: r.reviewed_by?.toString() || undefined,
+        approvedAt: r.reviewed_at ? new Date(r.reviewed_at) : undefined,
+        rejectionReason: r.rejection_reason || undefined,
+        publishedAt: r.published_at ? new Date(r.published_at) : undefined,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
       }));
@@ -304,10 +309,11 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
   const submitExamResult = async (id: string): Promise<void> => {
     setLoading(true);
     try {
-      await apiClient.publishExamResult(id).catch(() => {});
+      await apiClient.submitExamResult(id);
       await loadExamResults();
     } catch (error) {
       console.error("Failed to submit result", error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -315,14 +321,32 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
 
   const approveExamResult = async (id: string): Promise<void> => {
     setLoading(true);
-    await updateExamResult(id, { status: 'approved', approvedAt: new Date() });
-    setLoading(false);
+    try {
+      await apiClient.publishExamResult(id);
+      await loadExamResults();
+    } catch (error) {
+      console.error("Failed to publish result", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const rejectExamResult = async (id: string, reason: string): Promise<void> => {
     setLoading(true);
-    await updateExamResult(id, { status: 'rejected', remarks: reason });
-    setLoading(false);
+    try {
+      await apiClient.rejectExamResult(id, reason);
+      await loadExamResults();
+    } catch (error) {
+      console.error("Failed to reject result", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshExamResults = async (): Promise<void> => {
+    await loadExamResults();
   };
 
   const createSemesterResult = async (data: any): Promise<SemesterResult> => {
@@ -463,6 +487,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
         submitExamResult,
         approveExamResult,
         rejectExamResult,
+        refreshExamResults,
         createSemesterResult,
         getSemesterResults,
         publishSemesterResult,

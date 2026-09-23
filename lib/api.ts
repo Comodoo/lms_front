@@ -7,6 +7,58 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+export interface Paginated<T> {
+  data: T[];
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+}
+
+export interface PaginationOptions {
+  page?: number;
+  per_page?: number;
+}
+
+function isPaginated(body: unknown): body is Paginated<any> {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    Array.isArray((body as any).data) &&
+    typeof (body as any).current_page === 'number' &&
+    typeof (body as any).total === 'number'
+  );
+}
+
+// Fetch every page of a paginated endpoint (defaulting to arrays) so existing
+// callers keep working, and to bound the payload per request.
+async function fetchAll<T>(endpoint: string, perPage = 200): Promise<T[]> {
+  const out: T[] = [];
+  let page = 1;
+
+  for (;;) {
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const res = await apiFetch<Paginated<T> | T[]>(
+      `${endpoint}${sep}page=${page}&per_page=${perPage}`
+    );
+    const body = res.data;
+
+    if (isPaginated(body)) {
+      out.push(...(body.data as T[]));
+      if (page >= body.last_page) break;
+    } else if (Array.isArray(body)) {
+      out.push(...(body as T[]));
+      break;
+    } else {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return out;
+}
+
 // Generic fetch wrapper with auth token
 async function apiFetch<T>(
   endpoint: string,
@@ -65,7 +117,7 @@ export const authApi = {
   },
 
   async me() {
-    return apiFetch<any>('/user', { method: 'GET' });
+    return apiFetch<any>('/auth/profile', { method: 'GET' });
   },
 
   async register(data: any) {
@@ -154,8 +206,15 @@ export const coursesApi = {
 
 // Payments API
 export const paymentsApi = {
-  async getAll() {
-    return apiFetch('/payments');
+  async getAll(options?: PaginationOptions) {
+    if (options?.page !== undefined || options?.per_page !== undefined) {
+      const params = new URLSearchParams();
+      if (options.page !== undefined) params.set('page', String(options.page));
+      if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
+      return apiFetch(`/payments?${params}`);
+    }
+    const data = await fetchAll<any>('/payments');
+    return { data };
   },
 
   async getById(id: string) {
@@ -241,9 +300,20 @@ export const departmentsApi = {
 
 // Staff API
 export const staffApi = {
-  async getAll(role?: string) {
-    const url = role ? `/staff?role=${role}` : '/staff';
-    return apiFetch(url);
+  async getAll(role?: string, options?: PaginationOptions) {
+    const params = new URLSearchParams();
+    if (role) params.set('role', role);
+    if (options?.page !== undefined) params.set('page', String(options.page));
+    if (options?.per_page !== undefined) params.set('per_page', String(options.per_page));
+
+    const query = params.toString() ? `?${params}` : '';
+
+    if (params.has('page') || params.has('per_page')) {
+      return apiFetch<Paginated<any>>(`/staff${query}`);
+    }
+
+    const data = await fetchAll<any>(`/staff${query}`);
+    return { data };
   },
 
   async getById(id: string) {
@@ -300,8 +370,15 @@ export const creditsApi = {
 
 // Registrations API
 export const registrationsApi = {
-  async getAll() {
-    return apiFetch('/registrations');
+  async getAll(options?: PaginationOptions) {
+    if (options?.page !== undefined || options?.per_page !== undefined) {
+      const params = new URLSearchParams();
+      if (options.page !== undefined) params.set('page', String(options.page));
+      if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
+      return apiFetch(`/registrations?${params}`);
+    }
+    const data = await fetchAll<any>('/registrations');
+    return { data };
   },
 
   async getById(id: string) {
@@ -334,8 +411,15 @@ export const registrationsApi = {
 
 // Exam Results API
 export const examResultsApi = {
-  async getAll() {
-    return apiFetch('/exam-results');
+  async getAll(options?: PaginationOptions) {
+    if (options?.page !== undefined || options?.per_page !== undefined) {
+      const params = new URLSearchParams();
+      if (options.page !== undefined) params.set('page', String(options.page));
+      if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
+      return apiFetch(`/exam-results?${params}`);
+    }
+    const data = await fetchAll<any>('/exam-results');
+    return { data };
   },
 
   async getById(id: string) {
@@ -356,8 +440,23 @@ export const examResultsApi = {
     });
   },
 
+  async delete(id: string) {
+    return apiFetch(`/exam-results/${id}`, { method: 'DELETE' });
+  },
+
+  async submit(id: string) {
+    return apiFetch(`/exam-results/${id}/submit`, { method: 'POST' });
+  },
+
   async publish(id: string) {
     return apiFetch(`/exam-results/${id}/publish`, { method: 'POST' });
+  },
+
+  async reject(id: string, reason: string) {
+    return apiFetch(`/exam-results/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
   },
 
   async getStudentResults(studentId: string) {
@@ -366,6 +465,64 @@ export const examResultsApi = {
 
   async getCourseResults(courseOfferingId: string) {
     return apiFetch(`/course-offerings/${courseOfferingId}/results`);
+  },
+};
+
+// Roles & Permissions API
+export interface RoleRecord {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_system: boolean;
+  users_count?: number;
+  permissions?: { id: number; code: string; module: string; action: string; label: string; hint?: string }[];
+}
+
+export interface PermissionRecord {
+  id: number;
+  code: string;
+  module: string;
+  action: string;
+  label: string;
+  hint?: string;
+}
+
+export const rolesApi = {
+  async getAll() {
+    return apiFetch<RoleRecord[]>('/roles');
+  },
+
+  async getPermissions() {
+    return apiFetch<PermissionRecord[]>('/roles/permissions');
+  },
+
+  async getUsers() {
+    return apiFetch<any[]>('/roles/users');
+  },
+
+  async create(data: { id?: string; name: string; description?: string; permissions?: string[] }) {
+    return apiFetch('/roles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(roleId: string, data: { name: string; description?: string; permissions?: string[] }) {
+    return apiFetch(`/roles/${roleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(roleId: string) {
+    return apiFetch(`/roles/${roleId}`, { method: 'DELETE' });
+  },
+
+  async assignRoles(userId: string | number, roleIds: string[]) {
+    return apiFetch(`/roles/users/${userId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify({ role_ids: roleIds }),
+    });
   },
 };
 

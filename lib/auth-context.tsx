@@ -26,6 +26,9 @@ export interface AuthUser {
   twoFactorSecret?: string;
   preferences: UserPreferences;
   registration_number?: string;
+  roles?: string[];
+  permissions?: string[];
+  canAccessAdminPanel?: boolean;
 }
 
 export interface UserPreferences {
@@ -74,6 +77,10 @@ export interface AuthContextType extends AuthState {
   canAccessInstructorRoutes: () => boolean;
   canAccessAdminRoutes: () => boolean;
   canAccessAccountantRoutes: () => boolean;
+  /** Dynamic permission check: can(module, action) */
+  can: (module: string, action: string) => boolean;
+  /** Dynamic permission check: canAny(module, ['view','create']) */
+  canAny: (module: string, actions: string[]) => boolean;
 }
 
 export interface SignupData {
@@ -194,15 +201,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Background fetch to ensure user profile is fresh
       if (typeof window !== 'undefined') {
         authApi.me().then(res => {
-          if (res.data) {
+          const payload: any = res.data;
+          if (payload?.user) {
             setState(prev => {
               if (!prev.user) return prev;
-              const updatedUser = {
+              const roleIds = Array.isArray(payload.roles)
+                ? payload.roles.map((r: any) => (typeof r === 'string' ? r : r.role_id)).filter(Boolean)
+                : prev.user.roles;
+              const updatedUser: AuthUser = {
                 ...prev.user,
-                registration_number: res.data.registration_number
+                registration_number: payload.user.registration_number,
+                roles: roleIds,
+                permissions: Array.isArray(payload.permissions) ? payload.permissions : prev.user.permissions,
+                canAccessAdminPanel: !!payload.can_access_admin_panel,
               };
               localStorage.setItem('lms-auth', JSON.stringify({ user: updatedUser }));
-              return { ...prev, user: updatedUser as AuthUser };
+              return { ...prev, user: updatedUser };
             });
           }
         }).catch(err => console.error("Failed to fetch fresh user data", err));
@@ -229,10 +243,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (response.data) {
-        const { token, user: backendUser } = response.data;
+        const { token, user: backendUser, roles, permissions, can_access_admin_panel } = response.data as any;
         
         // Store token in localStorage
         localStorage.setItem('auth_token', token);
+
+        const roleIds = Array.isArray(roles)
+          ? roles.map((r: any) => (typeof r === 'string' ? r : r.role_id)).filter(Boolean)
+          : [];
         
         // Convert backend user to frontend format
         const authUser: AuthUser = {
@@ -248,6 +266,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           twoFactorEnabled: false,
           preferences: defaultPreferences,
           registration_number: backendUser.registration_number,
+          roles: roleIds,
+          permissions: Array.isArray(permissions) ? permissions : [],
+          canAccessAdminPanel: !!can_access_admin_panel,
         };
 
         setState({
@@ -546,8 +567,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [state.user]);
 
   const canAccessAdminRoutes = useCallback((): boolean => {
-    return state.user?.role === 'admin';
+    return !!state.user?.canAccessAdminPanel || state.user?.role === 'admin';
   }, [state.user]);
+
+  const can = useCallback((module: string, action: string): boolean => {
+    if (!state.user) return false;
+    if (state.user.role === 'admin') return true;
+    const codes = state.user.permissions || [];
+    if (codes.includes('*')) return true;
+    return codes.includes(`${module}.${action}`);
+  }, [state.user]);
+
+  const canAny = useCallback((module: string, actions: string[]): boolean => {
+    return actions.some((action) => can(module, action));
+  }, [can]);
 
   const canAccessAccountantRoutes = useCallback((): boolean => {
     return state.user?.role === 'accountant' || state.user?.role === 'admin';
@@ -580,6 +613,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         canAccessStudentRoutes,
         canAccessInstructorRoutes,
         canAccessAdminRoutes,
+        can,
+        canAny,
         canAccessAccountantRoutes,
       }}
     >

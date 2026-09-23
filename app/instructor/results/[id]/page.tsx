@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useResults } from '@/lib/results-context';
-import { ArrowLeft, Edit, Save, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Save, Trash2, CheckCircle2, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ExamResult } from '@/lib/college-types';
 
 const editSchema = z.object({
@@ -37,13 +38,11 @@ type EditFormValues = z.infer<typeof editSchema>;
 export default function ResultDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { getExamResultById, updateExamResult, deleteExamResult, submitExamResult, approveExamResult, rejectExamResult, calculateGrade, loading } = useResults();
+  const { getExamResultById, updateExamResult, deleteExamResult, submitExamResult, calculateGrade, loading } = useResults();
   
   const [result, setResult] = useState<ExamResult | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
 
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editSchema),
@@ -83,25 +82,23 @@ export default function ResultDetailPage() {
   };
 
   const handleSubmitResult = async () => {
-    await submitExamResult(params.id as string);
-    await loadResult();
-  };
-
-  const handleApprove = async () => {
-    await approveExamResult(params.id as string);
-    await loadResult();
-  };
-
-  const handleReject = async () => {
-    await rejectExamResult(params.id as string, rejectionReason);
-    setRejectDialogOpen(false);
-    setRejectionReason('');
-    await loadResult();
+    try {
+      await submitExamResult(params.id as string);
+      await loadResult();
+      toast.success(result?.status === 'rejected' ? 'Result resubmitted for approval' : 'Result submitted for approval');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit result');
+    }
   };
 
   const handleDelete = async () => {
-    await deleteExamResult(params.id as string);
-    router.push('/instructor/results');
+    try {
+      await deleteExamResult(params.id as string);
+      toast.success('Result deleted');
+      router.push('/instructor/results');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete result');
+    }
   };
 
   const getGradeColor = (grade: string) => {
@@ -125,7 +122,7 @@ export default function ResultDetailPage() {
     const variants: Record<string, any> = {
       draft: 'secondary',
       submitted: 'default',
-      approved: 'default',
+      published: 'default',
       rejected: 'destructive',
     };
 
@@ -169,41 +166,35 @@ export default function ResultDetailPage() {
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-              {result.status === 'draft' && (
-                <Button onClick={handleSubmitResult}>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Submit
-                </Button>
-              )}
-              {result.status === 'submitted' && (
-                <>
-                  <Button
-                    onClick={handleApprove}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
+              <div className="flex items-center gap-2">
+                <Badge variant={result.status === 'submitted' ? 'default' : result.status === 'rejected' ? 'destructive' : 'secondary'} className="capitalize">
+                  {result.status}
+                </Badge>
+                {(result.status === 'draft' || result.status === 'rejected') && (
+                  <Button variant="outline" onClick={() => setIsEditing(true)}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                )}
+                {(result.status === 'draft' || result.status === 'rejected') && (
+                  <Button onClick={handleSubmitResult}>
                     <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Approve
+                    {result.status === 'rejected' ? 'Resubmit' : 'Submit'}
                   </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setRejectDialogOpen(true)}
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Reject
+                )}
+                {result.status === 'submitted' && (
+                  <Button variant="outline" disabled>
+                    <Clock className="w-4 h-4 mr-2" />
+                    Pending Review
                   </Button>
-                </>
-              )}
-              <Button
-                variant="destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
+                )}
+                {(result.status === 'draft' || result.status === 'rejected') && (
+                  <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -410,15 +401,23 @@ export default function ResultDetailPage() {
               <div className="pt-4 border-t space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Submitted</span>
-                  <span className="text-sm">{new Date(result.submittedAt).toLocaleDateString()}</span>
+                  <span className="text-sm">{result.submittedAt ? new Date(result.submittedAt).toLocaleString() : '—'}</span>
                 </div>
-                {result.approvedAt && (
+                {result.publishedAt && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Approved</span>
-                    <span className="text-sm">{new Date(result.approvedAt).toLocaleDateString()}</span>
+                    <span className="text-sm text-muted-foreground">Published</span>
+                    <span className="text-sm">{new Date(result.publishedAt).toLocaleString()}</span>
                   </div>
                 )}
               </div>
+              {result.status === 'rejected' && result.rejectionReason && (
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground mb-1">Rejection Reason</p>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {result.rejectionReason}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -440,37 +439,6 @@ export default function ResultDetailPage() {
           </Card>
         </div>
       </div>
-
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Result</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejecting this result.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Rejection Reason</label>
-              <Textarea
-                placeholder="Enter the reason for rejection..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={4}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleReject} disabled={!rejectionReason}>
-              Reject Result
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

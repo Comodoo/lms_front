@@ -275,7 +275,7 @@ export interface ExamResult {
   gradePoints: number;
 
   // Status
-  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  status: 'draft' | 'submitted' | 'published' | 'rejected';
   remarks?: string;
 
   // Approval
@@ -283,6 +283,8 @@ export interface ExamResult {
   submittedAt: Date;
   approvedBy?: string;
   approvedAt?: Date;
+  rejectionReason?: string;
+  publishedAt?: Date;
 
   createdAt: Date;
   updatedAt: Date;

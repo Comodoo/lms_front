@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/lib/auth-context';
-import { AlertCircle, ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, Smartphone } from 'lucide-react';
+import { useTheme } from '@/lib/theme-context';
+import { AlertCircle, ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, Moon, Smartphone, Sun } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +18,7 @@ import { useState } from 'react';
 export default function LoginPage() {
   const router = useRouter();
   const { login, verifyTwoFactor, isLoading, error, user } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,7 +101,16 @@ export default function LoginPage() {
 
   if (showTwoFactor) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-muted/30">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-muted/30 relative">
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute top-4 right-4"
+          onClick={toggleTheme}
+          aria-label="Toggle dark mode"
+        >
+          {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
@@ -182,7 +193,16 @@ export default function LoginPage() {
       </div>
       
       {/* Right side - Login form */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 relative">
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute top-4 right-4"
+          onClick={toggleTheme}
+          aria-label="Toggle dark mode"
+        >
+          {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-2 mb-8">

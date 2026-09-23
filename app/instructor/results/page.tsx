@@ -37,6 +37,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useAuth } from '@/lib/auth-context';
 import { useResults } from '@/lib/results-context';
 import { Plus, Eye, Edit, Trash2, CheckCircle2, XCircle, Search, Filter, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ExamResult } from '@/lib/college-types';
 
 const resultSchema = z.object({
@@ -198,14 +199,24 @@ export default function InstructorResultsPage() {
 
   const handleDelete = async () => {
     if (selectedResult) {
-      await deleteExamResult(selectedResult.id);
+      try {
+        await deleteExamResult(selectedResult.id);
+        toast.success('Result deleted');
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to delete result');
+      }
       setDeleteDialogOpen(false);
       setSelectedResult(null);
     }
   };
 
   const handleSubmitResult = async (id: string) => {
-    await submitExamResult(id);
+    try {
+      await submitExamResult(id);
+      toast.success('Result submitted for approval');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit result');
+    }
   };
 
   const handleCourseChange = (courseId: string) => {
@@ -328,7 +339,7 @@ export default function InstructorResultsPage() {
     const variants: Record<string, any> = {
       draft: 'secondary',
       submitted: 'default',
-      approved: 'default',
+      published: 'default',
       rejected: 'destructive',
     };
 
@@ -406,7 +417,7 @@ export default function InstructorResultsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Results</CardTitle>
@@ -431,17 +442,27 @@ export default function InstructorResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {courseResults.filter(r => r.status === 'submitted' || r.status === 'published').length}
+              {courseResults.filter(r => r.status === 'submitted').length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Approved</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Published</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {courseResults.filter(r => r.status === 'approved').length}
+              {courseResults.filter(r => r.status === 'published').length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Rejected</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {courseResults.filter(r => r.status === 'rejected').length}
             </div>
           </CardContent>
         </Card>
@@ -545,7 +566,16 @@ export default function InstructorResultsPage() {
                         {result.grade}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getStatusBadge(result.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(result.status)}
+                        {result.status === 'rejected' && result.rejectionReason && (
+                          <span className="text-[11px] text-red-600 max-w-[220px] truncate" title={result.rejectionReason}>
+                            Rejected: {result.rejectionReason}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -555,7 +585,7 @@ export default function InstructorResultsPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        {result.status === 'draft' && (
+                        {(result.status === 'draft' || result.status === 'rejected') && (
                           <>
                             <Button
                               variant="ghost"
@@ -574,17 +604,19 @@ export default function InstructorResultsPage() {
                             </Button>
                           </>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedResult(result);
-                            setDeleteDialogOpen(true);
-                          }}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {(result.status === 'draft' || result.status === 'rejected') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedResult(result);
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

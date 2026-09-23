@@ -24,6 +24,7 @@ import {
     LogOut,
     Menu,
     Settings,
+    ShieldCheck,
     User,
     UserCog,
     Users,
@@ -34,27 +35,40 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Students', href: '/admin/users/students', icon: Users },
-  { name: 'Staff', href: '/admin/users/staff', icon: UserCog },
-  { name: 'Programs', href: '/admin/programs', icon: GraduationCap },
-  { name: 'Courses', href: '/admin/courses', icon: BookOpen },
-  { name: 'Registrations', href: '/admin/registrations', icon: ClipboardList },
-  { name: 'Results', href: '/admin/results', icon: FileText },
-  { name: 'Payments', href: '/admin/payments', icon: DollarSign },
-  { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, module: 'dashboard', action: 'view' },
+  { name: 'Students', href: '/admin/users/students', icon: Users, module: 'students', action: 'view' },
+  { name: 'Staff', href: '/admin/users/staff', icon: UserCog, module: 'staff', action: 'view' },
+  { name: 'Programs', href: '/admin/programs', icon: GraduationCap, module: 'programs', action: 'view' },
+  { name: 'Courses', href: '/admin/courses', icon: BookOpen, module: 'courses', action: 'view' },
+  { name: 'Registrations', href: '/admin/registrations', icon: ClipboardList, module: 'registrations', action: 'view' },
+  { name: 'Results', href: '/admin/results', icon: FileText, module: 'results', action: 'view' },
+  { name: 'Payments', href: '/admin/payments', icon: DollarSign, module: 'payments', action: 'view' },
+  { name: 'Reports', href: '/admin/reports', icon: BarChart3, module: 'reports', action: 'view' },
+  { name: 'Settings', href: '/admin/settings', icon: Settings, module: 'settings', action: 'view' },
+  { name: 'Roles & Permissions', href: '/admin/roles', icon: ShieldCheck, module: 'roles', action: 'view' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, can, isAuthenticated, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted || isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+    } else if (user && user.role !== 'admin' && user.canAccessAdminPanel === false) {
+      router.replace('/');
+    }
+  }, [mounted, isLoading, isAuthenticated, user, router]);
+
+  const visibleNavigation = navigation.filter((item) => can(item.module, item.action));
 
   const handleLogout = async () => {
     await logout();
@@ -82,7 +96,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const active = isActivePath(item.href);
           return (
             <Link

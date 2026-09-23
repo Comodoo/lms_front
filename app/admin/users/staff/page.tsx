@@ -41,8 +41,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Shield, Mail, Check, X } from 'lucide-react';
-import { staffApi } from '@/lib/api';
+import { Switch } from '@/components/ui/switch';
+import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Shield, Mail, Check, X, UserCog } from 'lucide-react';
+import { staffApi, rolesApi, RoleRecord, Paginated } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 interface Staff {
   id: string;
@@ -52,6 +54,7 @@ interface Staff {
   role: string;
   phone: string;
   created_at: string;
+  roles?: { id: string; name: string }[];
 }
 
 const PASSWORD_RULES = {
@@ -64,6 +67,7 @@ const PASSWORD_RULES = {
 
 export default function AdminStaffPage() {
   const router = useRouter();
+  const { can } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,6 +77,11 @@ export default function AdminStaffPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Server-side pagination (Load More)
+  const [hasMore, setHasMore] = useState(false);
+  const [nextPage, setNextPage] = useState(2);
+  const PER_PAGE = 50;
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -93,24 +102,55 @@ export default function AdminStaffPage() {
 
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Dynamic role assignment
+  const [allRoles, setAllRoles] = useState<RoleRecord[]>([]);
+  const [assignRoleOpen, setAssignRoleOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<Staff | null>(null);
+  const [assignRoleIds, setAssignRoleIds] = useState<string[]>([]);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignSaving, setAssignSaving] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     fetchStaff();
+    fetchRoles();
   }, []);
 
-  const fetchStaff = async () => {
+  const fetchRoles = async () => {
+    if (!can('roles', 'view')) return;
+    try {
+      const res = await rolesApi.getAll();
+      if (res.data) {
+        setAllRoles(res.data as unknown as RoleRecord[]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch roles:', err);
+    }
+  };
+
+  const fetchStaff = async (reset = true) => {
     setIsLoading(true);
     try {
-      const res = await staffApi.getAll();
-      if (res.data) {
-        setStaffList(res.data);
+      const page = reset ? 1 : nextPage;
+      const res = await staffApi.getAll(undefined, { page, per_page: PER_PAGE });
+      const data = res.data as unknown as Paginated<Staff> | undefined;
+
+      if (reset) {
+        setStaffList(data?.data ?? []);
+        setNextPage(2);
+      } else {
+        setStaffList(prev => [...(prev ?? []), ...(data?.data ?? [])]);
+        setNextPage(page + 1);
       }
+      setHasMore(!!data && data.current_page < data.last_page);
     } catch (err) {
       console.error('Failed to fetch staff:', err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const loadMore = () => fetchStaff(false);
 
   const resetForm = () => {
     setForm({
@@ -324,6 +364,7 @@ export default function AdminStaffPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Dynamic Roles</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -332,13 +373,13 @@ export default function AdminStaffPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : paginatedStaff.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No staff found
                   </TableCell>
                 </TableRow>
@@ -350,6 +391,19 @@ export default function AdminStaffPage() {
                       <div className="flex items-center gap-2">
                         <Shield className="w-3.5 h-3.5 text-blue-500" />
                         <span className="text-sm capitalize">{staff.role}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(staff.roles || []).length === 0 ? (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        ) : (
+                          staff.roles!.map((role) => (
+                            <Badge key={role.id} variant="outline" className="text-xs">
+                              {role.name}
+                            </Badge>
+                          ))
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -374,7 +428,17 @@ export default function AdminStaffPage() {
                             <Edit className="w-4 h-4 mr-2" />
                             Edit Staff
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {can('roles', 'assign') && (
+                          <DropdownMenuItem onClick={() => {
+                            setAssignTarget(staff);
+                            setAssignRoleIds((staff.roles || []).map(r => r.id));
+                            setAssignError(null);
+                            setAssignRoleOpen(true);
+                          }}>
+                            <UserCog className="w-4 h-4 mr-2" />
+                            Manage Roles
+                          </DropdownMenuItem>
+                          )}                          <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(staff.id)}>
                             <Trash2 className="w-4 h-4 mr-2" />
                             Deactivate
@@ -420,6 +484,14 @@ export default function AdminStaffPage() {
                 </PaginationContent>
               </Pagination>
             </div>
+
+            {hasMore && (
+              <div className="py-3 flex justify-center border-t">
+                <Button variant="outline" onClick={loadMore} disabled={isLoading}>
+                  {isLoading ? 'Loading...' : 'Load More'}
+                </Button>
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -583,6 +655,74 @@ export default function AdminStaffPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
             <Button onClick={handleEditSubmit}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    {/* Manage Roles Dialog */}
+      <Dialog open={assignRoleOpen} onOpenChange={setAssignRoleOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Roles — {assignTarget ? `${assignTarget.first_name} ${assignTarget.last_name}` : ''}</DialogTitle>
+            <DialogDescription>
+              Assign dynamic roles that grant admin-panel permissions. Permissions across all roles are combined.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {assignError && <div className="text-red-500 text-sm p-2 bg-red-50 rounded-md">{assignError}</div>}
+            <div className="grid grid-cols-1 gap-3">
+              {allRoles.map((role) => {
+                const checked = assignRoleIds.includes(role.id);
+                return (
+                  <div key={role.id} className="flex items-center justify-between border rounded-lg p-3">
+                    <div>
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        {role.name}
+                        {role.is_system && (
+                          <Badge variant="outline" className="text-[10px]">system</Badge>
+                        )}
+                      </div>
+                      {role.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
+                      )}
+                    </div>
+                    <Switch
+                      checked={checked}
+                      onCheckedChange={(on) =>
+                        setAssignRoleIds((prev) =>
+                          on ? [...prev, role.id] : prev.filter((id) => id !== role.id)
+                        )
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignRoleOpen(false)}>Cancel</Button>
+            <Button
+              disabled={assignSaving}
+              onClick={async () => {
+                if (!assignTarget) return;
+                setAssignSaving(true);
+                setAssignError(null);
+                try {
+                  const res = await rolesApi.assignRoles(assignTarget.id, assignRoleIds);
+                  if (res.error) {
+                    setAssignError(res.error);
+                    return;
+                  }
+                  await fetchStaff();
+                  setAssignRoleOpen(false);
+                } catch (err: any) {
+                  setAssignError(err.message || 'Failed to update roles');
+                } finally {
+                  setAssignSaving(false);
+                }
+              }}
+            >
+              {assignSaving ? 'Saving...' : 'Save Roles'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

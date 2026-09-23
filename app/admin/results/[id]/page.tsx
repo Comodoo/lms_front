@@ -493,7 +493,7 @@ export default function AdminStudentResultDetailPage() {
                 </div>
               </div>
             </div>
-            <Badge className={continuationStatus.color} className="text-sm px-4 py-2">
+            <Badge className={`${continuationStatus.color} text-sm px-4 py-2`}>
               <StatusIcon className="w-4 h-4 mr-2" />
               {continuationStatus.label}
             </Badge>
@@ -713,12 +713,13 @@ export default function AdminStudentResultDetailPage() {
                 <TableHead>Score</TableHead>
                 <TableHead>Grade</TableHead>
                 <TableHead>Points</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {examResults.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No course results available
                   </TableCell>
                 </TableRow>
@@ -746,10 +747,20 @@ export default function AdminStudentResultDetailPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>{result.gradePoints.toFixed(1)}</TableCell>
+                        <TableCell>
+                          <Badge variant={result.status === 'draft' ? 'secondary' : result.status === 'rejected' ? 'destructive' : 'default'} className="capitalize">
+                            {result.status}
+                          </Badge>
+                          {result.status === 'rejected' && result.rejectionReason && (
+                            <p className="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title={result.rejectionReason}>
+                              {result.rejectionReason}
+                            </p>
+                          )}
+                        </TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow className="bg-muted/30">
-                          <TableCell colSpan={9} className="p-0 border-b">
+                          <TableCell colSpan={10} className="p-0 border-b">
                             <div className="p-4 pl-12">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-semibold">Score Breakdown</h4>

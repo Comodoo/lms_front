@@ -22,14 +22,31 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useResults } from '@/lib/results-context';
-import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download, Settings, Info } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { Search, Filter, TrendingUp, AlertTriangle, CheckCircle, XCircle, Eye, Download, Settings, Info, Send, Ban } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function AdminResultsPage() {
   const router = useRouter();
-  const { studentProfiles: rawProfiles, examResults: rawResults, loading } = useResults();
+  const { studentProfiles: rawProfiles, examResults: rawResults, loading, approveExamResult, rejectExamResult } = useResults();
+  const { can } = useAuth();
   
   const [mounted, setMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,6 +55,12 @@ export default function AdminResultsPage() {
   const [academicYearFilter, setAcademicYearFilter] = useState<string>('2024/2025');
   const [minGpa, setMinGpa] = useState<number>(2.0);
   const [minGpaInput, setMinGpaInput] = useState<string>('2.0');
+
+  // Approval queue state
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectError, setRejectError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -156,6 +179,40 @@ export default function AdminResultsPage() {
       : 0,
   };
 
+  const submittedResults = rawResults.filter(r => r.status === 'submitted');
+  const submittedCount = submittedResults.length;
+
+  const getStudentForResult = (r: any) =>
+    rawProfiles.find(s => String(s.id) === String(r.studentProfileId));
+
+  const handlePublish = async (result: any) => {
+    setActionLoading(result.id);
+    try {
+      await approveExamResult(result.id);
+      toast.success(`Result for ${result.courseName} published`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to publish result');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectTarget) return;
+    setRejectError(null);
+    setActionLoading(rejectTarget.id);
+    try {
+      await rejectExamResult(rejectTarget.id, rejectReason.trim() || 'No reason provided');
+      toast.success(`Result for ${rejectTarget.courseName} rejected`);
+      setRejectTarget(null);
+      setRejectReason('');
+    } catch (err: any) {
+      setRejectError(err.message || 'Failed to reject result');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (!mounted) return null;
 
   return (
@@ -208,6 +265,18 @@ export default function AdminResultsPage() {
         </div>
       </div>
 
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-6">
+          <TabsTrigger value="overview">Performance Overview</TabsTrigger>
+          <TabsTrigger value="approvals" className="gap-2">
+            Approval Queue
+            {submittedCount > 0 && (
+              <Badge className="ml-1">{submittedCount}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Card>
@@ -406,6 +475,149 @@ export default function AdminResultsPage() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="approvals">
+          <Card>
+            <CardHeader>
+              <CardTitle>Result Approval Queue</CardTitle>
+              <CardDescription>
+                Results submitted by instructors awaiting publication. Students can only see published results.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="py-12 text-center text-muted-foreground">Loading...</div>
+              ) : submittedResults.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No results awaiting approval. Submitted results will appear here.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Course</TableHead>
+                      <TableHead>Year / Semester</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {submittedResults.map((result) => {
+                      const student = getStudentForResult(result);
+                      return (
+                        <TableRow key={result.id}>
+                          <TableCell>
+                            <div className="font-medium">{student ? student.studentName : `Student #${result.studentProfileId}`}</div>
+                            <div className="text-xs text-muted-foreground">{student?.registrationNumber}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{result.courseName}</div>
+                            <div className="text-xs text-muted-foreground">{result.courseCode}</div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {result.academicYear} · <span className="capitalize">{result.semester}</span>
+                          </TableCell>
+                          <TableCell className="font-semibold">{result.totalScore}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-semibold">{result.grade}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {result.submittedAt ? new Date(result.submittedAt).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {can('results', 'reject') && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600"
+                                  disabled={actionLoading === result.id}
+                                  onClick={() => {
+                                    setRejectTarget(result);
+                                    setRejectReason('');
+                                    setRejectError(null);
+                                  }}
+                                >
+                                  <Ban className="w-3.5 h-3.5 mr-1.5" />
+                                  Reject
+                                </Button>
+                              )}
+                              {can('results', 'publish') && (
+                                <Button
+                                  size="sm"
+                                  disabled={actionLoading === result.id}
+                                  onClick={() => handlePublish(result)}
+                                >
+                                  {actionLoading === result.id ? (
+                                    'Working...'
+                                  ) : (
+                                    <>
+                                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                                      Publish
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Reject Reason Dialog */}
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Result</DialogTitle>
+            <DialogDescription>
+              Provide a reason the instructor will see when the result is returned for correction.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {rejectError && (
+              <div className="text-red-500 text-sm p-2 bg-red-50 rounded-md">{rejectError}</div>
+            )}
+            {rejectTarget && (
+              <p className="text-sm">
+                <span className="font-medium">{rejectTarget.courseName}</span>
+                {getStudentForResult(rejectTarget) && (
+                  <> — {getStudentForResult(rejectTarget)!.studentName}</>
+                )}
+              </p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Rejection Reason</Label>
+              <Textarea
+                id="reject-reason"
+                placeholder="e.g. Missing CAT 2 scores, total does not add up..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={actionLoading === rejectTarget?.id}
+              onClick={handleRejectConfirm}
+            >
+              {actionLoading === rejectTarget?.id ? 'Rejecting...' : 'Reject Result'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

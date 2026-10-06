@@ -22,10 +22,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useResults } from '@/lib/results-context';
 import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Eye, CheckCircle, XCircle, Key } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { resetStudentPassword } from '@/lib/api-client';
+import { getStudents, resetStudentPassword } from '@/lib/api-client';
+import { registrationsApi } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
 import Swal from 'sweetalert2';
 
@@ -33,9 +33,9 @@ export default function AdminStudentsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { studentProfiles, deleteStudentProfile, loading, examResults } = useResults();
   const [mounted, setMounted] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filters
@@ -45,31 +45,38 @@ export default function AdminStudentsPage() {
 
   useEffect(() => {
     setMounted(true);
+    loadStudents();
   }, []);
 
-  useEffect(() => {
-    // Calculate CGPA for each student based on exam results
-    const enrichedData = studentProfiles.map(student => {
-      const studentResults = examResults.filter(r => 
-        String(r.studentProfileId) === String(student.id) || 
-        String(r.registrationNumber) === String(student.registrationNumber)
-      );
-
-      let totalPoints = 0;
-
-      studentResults.forEach(r => {
-        const gpaPoints = Number(r.gradePoints) || 0;
-        totalPoints += gpaPoints;
-      });
-
-      return {
-        ...student,
-        cgpa: studentResults.length > 0 ? (totalPoints / studentResults.length) : 0
-      };
-    });
-    
-    setStudents(enrichedData);
-  }, [studentProfiles, examResults]);
+  const loadStudents = async () => {
+    setLoading(true);
+    try {
+      const data = await getStudents();
+      const mapped = (Array.isArray(data) ? data : []).map((s: any) => ({
+        id: s.id,
+        registrationNumber: s.registration_number || `ZMS-26-${String(s.id).padStart(4, '0')}`,
+        firstName: s.first_name,
+        lastName: s.last_name,
+        email: s.email,
+        userId: s.id,
+        registrationId: s.registration_id,
+        programName: s.program_name || 'Not Assigned',
+        department: s.department || 'N/A',
+        intake: s.intake || 'Main Intake',
+        studyMode: s.study_mode || 'full_time',
+        currentYear: s.year || 1,
+        status: s.registration_status === 'approved'
+          ? 'active'
+          : (s.registration_status || 'registered'),
+      }));
+      setStudents(mapped);
+    } catch (err) {
+      console.error('Failed to load students:', err);
+      setStudents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     const result = await Swal.fire({
@@ -83,7 +90,15 @@ export default function AdminStudentsPage() {
     });
 
     if (result.isConfirmed) {
-      await deleteStudentProfile(id);
+      const student = students.find((s) => s.id === id);
+      if (student?.registrationId) {
+        try {
+          await registrationsApi.delete(student.registrationId);
+        } catch (error) {
+          console.error('Failed to delete the registration', error);
+        }
+      }
+      setStudents((prev) => prev.filter((s) => s.id !== id));
       Swal.fire(
         'Deleted!',
         'Student profile has been deleted.',
@@ -210,7 +225,13 @@ export default function AdminStudentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStudents.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : filteredStudents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No students found
@@ -244,11 +265,11 @@ export default function AdminStudentsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => router.push(`/admin/users/students/${student.id}`)}>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/users/students/${student.registrationId || student.id}`)}>
                             <Eye className="w-4 h-4 mr-2" />
                             View Profile
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push(`/admin/users/edit/${student.id}`)}>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/users/edit/${student.registrationId || student.id}`)}>
                             <Edit className="w-4 h-4 mr-2" />
                             Edit Student
                           </DropdownMenuItem>

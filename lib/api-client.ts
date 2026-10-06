@@ -1,11 +1,52 @@
 /**
  * API Client for Laravel Backend Integration
- * 
- * This client connects the Next.js frontend to the Laravel backend API.
+ *
  * Base URL: http://localhost:8000/api
+ *
+ * NOTE: this client is a second, historically divergent API wrapper. It now
+ * shares the same failure semantics as `lib/api.ts` so that a 403 always means
+ * "insufficient permission" and never silently resolves to an empty object.
  */
 
+import { API_ERROR, type ApiErrorCode } from './api';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+
+/**
+ * Error thrown for every non-2xx response. `code` is the value UI code should
+ * branch on; `status` is the raw HTTP status.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: ApiErrorCode;
+  readonly errors?: Record<string, string[]>;
+
+  constructor(message: string, status: number, code: ApiErrorCode, errors?: Record<string, string[]>) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.errors = errors;
+  }
+
+  get isPermissionDenied(): boolean {
+    return this.code === API_ERROR.INSUFFICIENT_PERMISSION;
+  }
+
+  get isUnauthenticated(): boolean {
+    return this.code === API_ERROR.UNAUTHENTICATED;
+  }
+}
+
+/** Mirrors `codeForStatus` in lib/api.ts. */
+function codeForStatus(status: number): ApiErrorCode {
+  if (status === 401) return API_ERROR.UNAUTHENTICATED;
+  if (status === 403) return API_ERROR.INSUFFICIENT_PERMISSION;
+  if (status === 404) return API_ERROR.NOT_FOUND;
+  if (status === 422) return API_ERROR.VALIDATION;
+  if (status === 429) return API_ERROR.RATE_LIMITED;
+  return API_ERROR.SERVER;
+}
 
 // Token storage
 const getToken = () => {
@@ -27,29 +68,46 @@ const removeToken = () => {
   }
 };
 
+/** Session keys only. Never `localStorage.clear()` — that wipes app state. */
+const AUTH_STORAGE_KEYS = ['auth_token', 'lms-auth', 'lms-users'];
+
+function clearSession(): void {
+  if (typeof window === 'undefined') return;
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+}
+
+interface ApiRequestOptions extends RequestInit {
+  /** Opt out of the global 401 handler (login/register/profile bootstrap). */
+  skipAuthRedirect?: boolean;
+}
+
 // API request helper
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiRequestOptions = {}
 ): Promise<T> {
+  const { skipAuthRedirect = false, ...init } = options;
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Accept': 'application/json',
-    'Content-Type': 'application/json',
   };
+
+  // Do not force a JSON content-type on FormData bodies.
+  if (!(init.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = getToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  Object.assign(headers, (init.headers as Record<string, string>) || {});
+
   const config: RequestInit = {
-    ...options,
-    headers: {
-      ...headers,
-      ...options.headers,
-    },
+    ...init,
+    headers,
     credentials: 'include',
   };
 
@@ -57,21 +115,38 @@ async function apiRequest<T>(
   try {
     response = await fetch(url, config);
   } catch (error: any) {
-    console.warn(`[API Client] Network error when fetching ${endpoint}:`, error.message);
-    throw new Error(`Network Error: Failed to connect to backend. Is the server running?`);
+    throw new ApiError(
+      'Cannot reach the server. Check your connection and try again.',
+      0,
+      API_ERROR.NETWORK
+    );
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    // Handle unauthenticated error specially - don't throw for 401 if no token exists
-    if (response.status === 401) {
-      const token = getToken();
-      if (!token) {
-        // No token, user not logged in - return empty data instead of throwing
-        return {} as T;
+    const body = await response.json().catch(() => ({}));
+    const code = codeForStatus(response.status);
+
+    if (code === API_ERROR.UNAUTHENTICATED) {
+      if (!skipAuthRedirect) {
+        clearSession();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:expired'));
+        }
       }
+      // A 401 with no token simply means "not signed in"; still throw, so that
+      // callers can no longer mistake it for a successful empty response.
     }
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+
+    throw new ApiError(
+      body?.message || body?.error || `Request failed with status ${response.status}`,
+      response.status,
+      code,
+      body?.errors
+    );
+  }
+
+  if (response.status === 204) {
+    return {} as T;
   }
 
   return response.json();
@@ -96,6 +171,7 @@ export async function register(data: {
   }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(data),
+    skipAuthRedirect: true,
   });
 
   setToken(response.token);
@@ -110,6 +186,7 @@ export async function login(email: string, password: string) {
   }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
+    skipAuthRedirect: true,
   });
 
   setToken(response.token);
@@ -118,14 +195,14 @@ export async function login(email: string, password: string) {
 
 export async function logout() {
   try {
-    await apiRequest('/auth/logout', { method: 'POST' });
+    await apiRequest('/auth/logout', { method: 'POST', skipAuthRedirect: true });
   } finally {
-    removeToken();
+    clearSession();
   }
 }
 
 export async function getCurrentUser() {
-  return apiRequest('/auth/profile');
+  return apiRequest('/auth/profile', { skipAuthRedirect: true });
 }
 
 export async function updateProfile(data: {
@@ -303,6 +380,11 @@ export async function getRegistration(id: number | string) {
 }
 
 // ==================== USER MANAGEMENT ====================
+export async function getStudents() {
+  const data = await apiRequest<any>('/students');
+  return Array.isArray(data) ? data : [];
+}
+
 export async function resetStudentPassword(userId: string | number) {
   return apiRequest(`/users/${userId}/reset-password`, {
     method: 'POST',

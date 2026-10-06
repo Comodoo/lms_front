@@ -1,10 +1,52 @@
 // API Service Layer for Backend Integration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
-interface ApiResponse<T> {
+/**
+ * Machine-readable failure codes. UI code should branch on these rather than on
+ * message text, so that "you don't have permission" is never rendered as
+ * "failed to load roles" (which is what made permission bugs so hard to spot).
+ */
+export const API_ERROR = {
+  UNAUTHENTICATED: 'UNAUTHENTICATED',
+  INSUFFICIENT_PERMISSION: 'INSUFFICIENT_PERMISSION',
+  NOT_FOUND: 'NOT_FOUND',
+  VALIDATION: 'VALIDATION_ERROR',
+  RATE_LIMITED: 'RATE_LIMITED',
+  SERVER: 'SERVER_ERROR',
+  NETWORK: 'NETWORK_ERROR',
+} as const;
+
+export type ApiErrorCode = (typeof API_ERROR)[keyof typeof API_ERROR];
+
+export interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+  /** HTTP status, absent only for network failures. */
+  status?: number;
+  /** One of API_ERROR. */
+  code?: ApiErrorCode;
+  /** Field-level validation errors, when the backend returns them. */
+  errors?: Record<string, string[]>;
+}
+
+/** Human-facing message for a failure. Prefers the server's own text. */
+export function describeApiError(res: { error?: string; code?: ApiErrorCode } | undefined): string {
+  if (!res) return 'Something went wrong. Please try again.';
+  if (res.code === API_ERROR.UNAUTHENTICATED) return 'Your session has expired. Please sign in again.';
+  if (res.code === API_ERROR.INSUFFICIENT_PERMISSION) {
+    return "You don't have permission to perform this action.";
+  }
+  if (res.code === API_ERROR.NOT_FOUND) return 'The requested record was not found.';
+  if (res.code === API_ERROR.RATE_LIMITED) return 'Too many requests. Please wait a moment and try again.';
+  if (res.code === API_ERROR.NETWORK) return 'Cannot reach the server. Check your connection and try again.';
+  if (res.code === API_ERROR.SERVER) return 'The server ran into a problem. Please try again.';
+  return res.error || 'Something went wrong. Please try again.';
+}
+
+/** True when a failure was a permission denial rather than a bug. */
+export function isPermissionDenied(res: { code?: ApiErrorCode } | undefined): boolean {
+  return res?.code === API_ERROR.INSUFFICIENT_PERMISSION;
 }
 
 export interface Paginated<T> {
@@ -30,9 +72,46 @@ function isPaginated(body: unknown): body is Paginated<any> {
   );
 }
 
+/** Read the bearer token without breaking server-side rendering. */
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth_token');
+}
+
+/** Keys that constitute a session. Deliberately not `localStorage.clear()`. */
+const AUTH_STORAGE_KEYS = ['auth_token', 'lms-auth', 'lms-users'];
+
+function clearSession(): void {
+  if (typeof window === 'undefined') return;
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  sessionStorage.removeItem('auth_token');
+}
+
+/** Map an HTTP status onto one of API_ERROR. */
+function codeForStatus(status: number): ApiErrorCode {
+  if (status === 401) return API_ERROR.UNAUTHENTICATED;
+  if (status === 403) return API_ERROR.INSUFFICIENT_PERMISSION;
+  if (status === 404) return API_ERROR.NOT_FOUND;
+  if (status === 422) return API_ERROR.VALIDATION;
+  if (status === 429) return API_ERROR.RATE_LIMITED;
+  return API_ERROR.SERVER;
+}
+
+interface ApiFetchOptions extends RequestInit {
+  /**
+   * Set to false for endpoints the unauthenticated user must be able to call
+   * (`/auth/login`, `/auth/register`) and for the profile call that the auth
+   * provider itself makes, so a 401 clears the session exactly once.
+   */
+  skipAuthRedirect?: boolean;
+}
+
 // Fetch every page of a paginated endpoint (defaulting to arrays) so existing
 // callers keep working, and to bound the payload per request.
-async function fetchAll<T>(endpoint: string, perPage = 200): Promise<T[]> {
+async function fetchAll<T>(
+  endpoint: string,
+  perPage = 200
+): Promise<ApiResponse<T[]>> {
   const out: T[] = [];
   let page = 1;
 
@@ -41,6 +120,13 @@ async function fetchAll<T>(endpoint: string, perPage = 200): Promise<T[]> {
     const res = await apiFetch<Paginated<T> | T[]>(
       `${endpoint}${sep}page=${page}&per_page=${perPage}`
     );
+
+    // Propagate failures (401/403/404) instead of silently resolving to [],
+    // which previously made a denied request look like "no records".
+    if (res.error || res.status === 401 || res.status === 403 || res.status === 404) {
+      return { error: res.error, message: res.message, status: res.status, code: res.code, errors: res.errors };
+    }
+
     const body = res.data;
 
     if (isPaginated(body)) {
@@ -56,55 +142,73 @@ async function fetchAll<T>(endpoint: string, perPage = 200): Promise<T[]> {
     page += 1;
   }
 
-  return out;
+  return { data: out, status: 200 };
 }
 
 // Generic fetch wrapper with auth token
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiFetchOptions = {}
 ): Promise<ApiResponse<T>> {
-  const token = localStorage.getItem('auth_token');
+  const { skipAuthRedirect = false, ...init } = options;
+  const token = getToken();
 
   const headers: Record<string, string> = {
     'Accept': 'application/json',
   };
 
-  if (!(options.body instanceof FormData)) {
+  if (!(init.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
-  if (options.headers) {
-    Object.assign(headers, options.headers);
+  if (init.headers) {
+    Object.assign(headers, init.headers as Record<string, string>);
   }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...init,
       headers,
+      cache: 'no-store',
     });
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Network error',
+      code: API_ERROR.NETWORK,
+    };
+  }
 
-    const data = await response.json();
+  // Some endpoints (204, or a Laravel error with no body) have no JSON payload.
+  const data = await response.json().catch(() => ({}) as any);
 
-    if (!response.ok) {
-      if (response.status === 401 && endpoint !== '/auth/login') {
-        if (typeof window !== 'undefined') {
-          localStorage.clear();
-          sessionStorage.clear();
-          window.location.href = '/login';
-        }
+  if (!response.ok) {
+    const code = codeForStatus(response.status);
+    const serverMessage: string | undefined = data?.message ?? data?.error;
+
+    // A 401 means the token is gone or expired. Tear the session down once and
+    // tell the auth provider, which owns all redirect decisions.
+    if (code === API_ERROR.UNAUTHENTICATED && !skipAuthRedirect) {
+      clearSession();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:expired'));
       }
-      return { error: data.message || data.error || 'Request failed' };
     }
 
-    return { data };
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Network error' };
+    return {
+      error: serverMessage,
+      message: serverMessage,
+      status: response.status,
+      code,
+      errors: data?.errors,
+    };
   }
+
+  return { data, status: response.status };
 }
 
 // Auth API
@@ -113,26 +217,33 @@ export const authApi = {
     return apiFetch<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+      skipAuthRedirect: true,
     });
   },
 
+  /**
+   * The server-authoritative view of the current user: identity, assigned role
+   * ids and the resolved permission codes. This is the ONLY source used for
+   * authorization decisions on the client.
+   */
   async me() {
-    return apiFetch<any>('/auth/profile', { method: 'GET' });
+    return apiFetch<any>('/auth/profile', { method: 'GET', skipAuthRedirect: true });
   },
 
   async register(data: any) {
     return apiFetch<{ user: any }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
+      skipAuthRedirect: true,
     });
   },
 
   async logout() {
-    return apiFetch('/auth/logout', { method: 'POST' });
+    return apiFetch('/auth/logout', { method: 'POST', skipAuthRedirect: true });
   },
 
   async getProfile() {
-    return apiFetch('/auth/profile');
+    return apiFetch('/auth/profile', { skipAuthRedirect: true });
   },
 
   async updateProfile(data: any) {
@@ -214,7 +325,7 @@ export const paymentsApi = {
       return apiFetch(`/payments?${params}`);
     }
     const data = await fetchAll<any>('/payments');
-    return { data };
+    return data;
   },
 
   async getById(id: string) {
@@ -313,7 +424,7 @@ export const staffApi = {
     }
 
     const data = await fetchAll<any>(`/staff${query}`);
-    return { data };
+    return data;
   },
 
   async getById(id: string) {
@@ -378,7 +489,7 @@ export const registrationsApi = {
       return apiFetch(`/registrations?${params}`);
     }
     const data = await fetchAll<any>('/registrations');
-    return { data };
+    return data;
   },
 
   async getById(id: string) {
@@ -419,7 +530,7 @@ export const examResultsApi = {
       return apiFetch(`/exam-results?${params}`);
     }
     const data = await fetchAll<any>('/exam-results');
-    return { data };
+    return data;
   },
 
   async getById(id: string) {
@@ -475,7 +586,11 @@ export interface RoleRecord {
   description?: string | null;
   is_system: boolean;
   users_count?: number;
-  permissions?: { id: number; code: string; module: string; action: string; label: string; hint?: string }[];
+  /**
+   * The backend may return codes (`["users.view"]`) or full records
+   * (`[{ id, code, module, action }]`). Normalize with `toPermissionCodes`.
+   */
+  permissions?: (string | PermissionRecord)[] | null;
 }
 
 export interface PermissionRecord {
@@ -483,8 +598,22 @@ export interface PermissionRecord {
   code: string;
   module: string;
   action: string;
-  label: string;
+  label?: string;
   hint?: string;
+}
+
+export interface AssignableRole {
+  id: string;
+  name: string;
+}
+
+export interface RoleUser {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  roles?: AssignableRole[] | null;
 }
 
 export const rolesApi = {
@@ -497,16 +626,21 @@ export const rolesApi = {
   },
 
   async getUsers() {
-    return apiFetch<any[]>('/roles/users');
+    return apiFetch<RoleUser[]>('/roles/users');
   },
 
-  async create(data: { id?: string; name: string; description?: string; permissions?: string[] }) {
+  async create(data: { name: string; description?: string; permissions?: string[] }) {
     return apiFetch('/roles', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
+  /**
+   * `permissions` is an array of canonical `"module.action"` codes. Sending the
+   * full list is intentional: the matrix is the source of truth for a role, so
+   * a partial update would make un-ticking a box impossible to persist.
+   */
   async update(roleId: string, data: { name: string; description?: string; permissions?: string[] }) {
     return apiFetch(`/roles/${roleId}`, {
       method: 'PUT',

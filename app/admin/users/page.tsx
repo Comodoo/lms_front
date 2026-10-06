@@ -1,16 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -18,25 +13,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -45,851 +32,359 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Users, Search, MoreVertical, Plus, UserCheck, UserX, Eye, Trash2, 
-  Mail, Download, Filter, Edit, Ban, Shield, Key, RefreshCw,
-  ChevronLeft, ChevronRight, ArrowUpDown, CheckCircle, XCircle
-} from 'lucide-react';
+import { RefreshCw, Search, ShieldCheck, UserCog, Users } from 'lucide-react';
 
-// Types
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'student' | 'instructor' | 'admin' | 'super_admin';
-  country: string;
-  phone?: string;
-  joinedAt: string;
-  lastLogin?: string;
-  status: 'active' | 'pending' | 'suspended' | 'banned';
-  emailVerified: boolean;
-  coursesEnrolled?: number;
-  coursesCreated?: number;
-  totalSpent?: number;
-  totalEarned?: number;
+import { rolesApi, describeApiError, isPermissionDenied, type RoleUser } from '@/lib/api';
+import { PermissionGuard } from '@/components/auth/permission-guard';
+import { useAuth } from '@/lib/auth-context';
+import { usePermissionGuard } from '@/lib/use-permission';
+
+const PORTAL_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  instructor: 'Instructor',
+  accountant: 'Accountant',
+  student: 'Student',
+};
+
+const PORTAL_BADGE: Record<string, string> = {
+  admin: 'bg-purple-100 text-purple-800',
+  instructor: 'bg-blue-100 text-blue-800',
+  accountant: 'bg-emerald-100 text-emerald-800',
+  student: 'bg-slate-100 text-slate-800',
+};
+
+/**
+ * User directory.
+ *
+ * This page used to be a self-contained mock: a hard-coded `initialUsers`
+ * array, `useState` CRUD that never touched the API, and a `super_admin` role
+ * that exists nowhere in the real auth system. Any permission change made here
+ * was silently discarded, which made it look as though the roles matrix was
+ * broken.
+ *
+ * It is now backed by the same endpoints as the rest of the admin panel and
+ * uses the same canonical permission codes. Creating and editing staff and
+ * students is delegated to the dedicated pages, which have their own forms and
+ * API contracts.
+ */
+export default function AdminUsersPage() {
+  return (
+    <PermissionGuard module="students" action="view" backHref="/admin">
+      <AdminUsersContent />
+    </PermissionGuard>
+  );
 }
 
-// Mock data
-const initialUsers: User[] = [
-  { id: '1', name: 'John Mwangi', email: 'john@example.com', role: 'student', country: 'Kenya', phone: '+254712345678', joinedAt: '2024-03-15', lastLogin: '2024-03-20', status: 'active', emailVerified: true, coursesEnrolled: 5, totalSpent: 250 },
-  { id: '2', name: 'Sarah Ochieng', email: 'sarah@example.com', role: 'instructor', country: 'Kenya', phone: '+254723456789', joinedAt: '2024-03-14', lastLogin: '2024-03-19', status: 'active', emailVerified: true, coursesCreated: 3, totalEarned: 15000 },
-  { id: '3', name: 'Michael Adeyemi', email: 'michael@example.com', role: 'student', country: 'Nigeria', joinedAt: '2024-03-14', status: 'pending', emailVerified: false, coursesEnrolled: 0 },
-  { id: '4', name: 'Grace Mensah', email: 'grace@example.com', role: 'student', country: 'Ghana', phone: '+233201234567', joinedAt: '2024-03-13', lastLogin: '2024-03-18', status: 'active', emailVerified: true, coursesEnrolled: 8, totalSpent: 480 },
-  { id: '5', name: 'David Kimani', email: 'david@example.com', role: 'instructor', country: 'Kenya', joinedAt: '2024-03-12', lastLogin: '2024-03-10', status: 'suspended', emailVerified: true, coursesCreated: 2, totalEarned: 8500 },
-  { id: '6', name: 'Amina Hassan', email: 'amina@example.com', role: 'student', country: 'Tanzania', phone: '+255712345678', joinedAt: '2024-03-11', lastLogin: '2024-03-17', status: 'active', emailVerified: true, coursesEnrolled: 3, totalSpent: 120 },
-  { id: '7', name: 'Peter Okonkwo', email: 'peter@example.com', role: 'instructor', country: 'Nigeria', joinedAt: '2024-03-10', status: 'active', emailVerified: true, coursesCreated: 5, totalEarned: 25000 },
-  { id: '8', name: 'Fatima Diallo', email: 'fatima@example.com', role: 'student', country: 'Senegal', joinedAt: '2024-03-09', status: 'banned', emailVerified: false },
-  { id: '9', name: 'James Banda', email: 'james@example.com', role: 'admin', country: 'Zambia', joinedAt: '2024-02-01', lastLogin: '2024-03-20', status: 'active', emailVerified: true },
-  { id: '10', name: 'Rose Nkomo', email: 'rose@example.com', role: 'student', country: 'South Africa', phone: '+27821234567', joinedAt: '2024-03-08', lastLogin: '2024-03-16', status: 'active', emailVerified: true, coursesEnrolled: 12, totalSpent: 890 },
-];
+function AdminUsersContent() {
+  const { user: currentUser, refreshProfile } = useAuth();
+  const guardAssign = usePermissionGuard('roles', 'assign');
 
-const countries = ['Kenya', 'Nigeria', 'South Africa', 'Tanzania', 'Ghana', 'Uganda', 'Rwanda', 'Ethiopia', 'Senegal', 'Zambia'];
+  const [users, setUsers] = useState<RoleUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [countryFilter, setCountryFilter] = useState('all');
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState<keyof User>('joinedAt');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  
-  // Dialog states
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isViewOpen, setIsViewOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isBulkActionOpen, setIsBulkActionOpen] = useState(false);
-  const [bulkAction, setBulkAction] = useState<string>('');
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'student' as User['role'],
-    country: '',
-    phone: '',
-    status: 'active' as User['status'],
-    sendWelcomeEmail: true,
-  });
+  const [search, setSearch] = useState('');
+  const [portalFilter, setPortalFilter] = useState('all');
 
-  const itemsPerPage = 10;
+  const [assignTarget, setAssignTarget] = useState<RoleUser | null>(null);
+  const [assignRoleIds, setAssignRoleIds] = useState<string[]>([]);
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
-  // Filter and sort users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    const matchesCountry = countryFilter === 'all' || user.country === countryFilter;
-    return matchesSearch && matchesRole && matchesStatus && matchesCountry;
-  }).sort((a, b) => {
-    const aVal = a[sortField] || '';
-    const bVal = b[sortField] || '';
-    if (sortDirection === 'asc') {
-      return aVal > bVal ? 1 : -1;
+  const [roles, setRoles] = useState<{ id: string; name: string; is_system?: boolean }[]>([]);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await rolesApi.getUsers();
+      if (isPermissionDenied(res)) {
+        setDenied(true);
+        setUsers([]);
+        return;
+      }
+      if (res.error) throw new Error(describeApiError(res));
+      setDenied(false);
+      setUsers((res.data as unknown as RoleUser[]) ?? []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load users');
+    } finally {
+      setIsLoading(false);
     }
-    return aVal < bVal ? 1 : -1;
-  });
+  }, []);
 
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const paginatedUsers = filteredUsers.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  // CRUD Operations
-  const handleCreateUser = () => {
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-      country: formData.country,
-      phone: formData.phone || undefined,
-      status: formData.status,
-      joinedAt: new Date().toISOString().split('T')[0],
-      emailVerified: false,
+  // Roles are only needed for the assignment dialog.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await rolesApi.getAll();
+      if (cancelled || !res.data) return;
+      setRoles(res.data as { id: string; name: string; is_system?: boolean }[]);
+    })();
+    return () => {
+      cancelled = true;
     };
-    setUsers([newUser, ...users]);
-    setIsCreateOpen(false);
-    resetForm();
-  };
+  }, []);
 
-  const handleUpdateUser = () => {
-    if (!selectedUser) return;
-    setUsers(users.map(u => 
-      u.id === selectedUser.id 
-        ? { ...u, ...formData }
-        : u
-    ));
-    setIsEditOpen(false);
-    setSelectedUser(null);
-    resetForm();
-  };
+  const portals = useMemo(() => {
+    const set = new Set<string>();
+    users.forEach((u) => u.role && set.add(u.role));
+    return Array.from(set).sort();
+  }, [users]);
 
-  const handleDeleteUser = () => {
-    if (!selectedUser) return;
-    setUsers(users.filter(u => u.id !== selectedUser.id));
-    setIsDeleteOpen(false);
-    setSelectedUser(null);
-  };
-
-  const handleStatusChange = (userId: string, newStatus: User['status']) => {
-    setUsers(users.map(u => 
-      u.id === userId ? { ...u, status: newStatus } : u
-    ));
-  };
-
-  const handleBulkAction = () => {
-    switch (bulkAction) {
-      case 'activate':
-        setUsers(users.map(u => 
-          selectedUsers.includes(u.id) ? { ...u, status: 'active' } : u
-        ));
-        break;
-      case 'suspend':
-        setUsers(users.map(u => 
-          selectedUsers.includes(u.id) ? { ...u, status: 'suspended' } : u
-        ));
-        break;
-      case 'delete':
-        setUsers(users.filter(u => !selectedUsers.includes(u.id)));
-        break;
-      case 'verify':
-        setUsers(users.map(u => 
-          selectedUsers.includes(u.id) ? { ...u, emailVerified: true } : u
-        ));
-        break;
-    }
-    setSelectedUsers([]);
-    setIsBulkActionOpen(false);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      role: 'student',
-      country: '',
-      phone: '',
-      status: 'active',
-      sendWelcomeEmail: true,
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return users.filter((u) => {
+      const haystack = `${u.first_name ?? ''} ${u.last_name ?? ''} ${u.email ?? ''}`.toLowerCase();
+      const matchesSearch = !term || haystack.includes(term);
+      const matchesPortal = portalFilter === 'all' || u.role === portalFilter;
+      return matchesSearch && matchesPortal;
     });
+  }, [users, search, portalFilter]);
+
+  const openAssign = (user: RoleUser) => {
+    if (!guardAssign()) return;
+    setAssignTarget(user);
+    setAssignRoleIds((user.roles ?? []).map((r) => r.id));
+    setAssignError(null);
   };
 
-  const openEditDialog = (user: User) => {
-    setSelectedUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      country: user.country,
-      phone: user.phone || '',
-      status: user.status,
-      sendWelcomeEmail: false,
-    });
-    setIsEditOpen(true);
-  };
+  const saveAssign = async () => {
+    if (!assignTarget) return;
+    if (!guardAssign()) return;
 
-  const openViewDialog = (user: User) => {
-    setSelectedUser(user);
-    setIsViewOpen(true);
-  };
+    setAssignSaving(true);
+    setAssignError(null);
+    try {
+      const res = await rolesApi.assignRoles(assignTarget.id, assignRoleIds);
+      if (res.error) throw new Error(describeApiError(res));
 
-  const openDeleteDialog = (user: User) => {
-    setSelectedUser(user);
-    setIsDeleteOpen(true);
-  };
+      const name = `${assignTarget.first_name ?? ''} ${assignTarget.last_name ?? ''}`.trim();
+      setAssignTarget(null);
+      await load();
 
-  const toggleSelectAll = () => {
-    if (selectedUsers.length === paginatedUsers.length) {
-      setSelectedUsers([]);
-    } else {
-      setSelectedUsers(paginatedUsers.map(u => u.id));
+      // If the admin changed their own roles, refresh immediately instead of
+      // waiting for the next window focus.
+      if (currentUser && String(assignTarget.id) === String(currentUser.id)) {
+        await refreshProfile();
+        toast.success('Your roles were updated', { description: 'Your permissions have been reloaded.' });
+      } else {
+        toast.success(`Roles updated for ${name}`, {
+          description:
+            'The new permissions apply the next time that user loads the app or returns to their tab.',
+        });
+      }
+    } catch (err: any) {
+      setAssignError(err.message || 'Failed to update roles');
+    } finally {
+      setAssignSaving(false);
     }
-  };
-
-  const toggleSelectUser = (userId: string) => {
-    setSelectedUsers(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getStatusColor = (status: User['status']) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'suspended': return 'bg-orange-100 text-orange-800';
-      case 'banned': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getRoleColor = (role: User['role']) => {
-    switch (role) {
-      case 'super_admin': return 'bg-purple-100 text-purple-800';
-      case 'admin': return 'bg-blue-100 text-blue-800';
-      case 'instructor': return 'bg-indigo-100 text-indigo-800';
-      case 'student': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Stats
-  const stats = {
-    total: users.length,
-    active: users.filter(u => u.status === 'active').length,
-    pending: users.filter(u => u.status === 'pending').length,
-    suspended: users.filter(u => u.status === 'suspended').length,
-    students: users.filter(u => u.role === 'student').length,
-    instructors: users.filter(u => u.role === 'instructor').length,
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="container mx-auto py-8 px-4 space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage all platform users</p>
+          <h1 className="text-3xl font-bold mb-2">Users</h1>
+          <p className="text-muted-foreground">
+            Every account in the system, with the roles that determine what each one can do.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add User
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
-                <DialogDescription>
-                  Add a new user to the platform. They will receive a welcome email.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Enter full name"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="Enter email address"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v as User['role'] })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="instructor">Instructor</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="super_admin">Super Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Select value={formData.country} onValueChange={(v) => setFormData({ ...formData, country: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {countries.map(country => (
-                          <SelectItem key={country} value={country}>{country}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="phone">Phone Number (Optional)</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+255712345678"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="welcome" 
-                    checked={formData.sendWelcomeEmail}
-                    onCheckedChange={(checked) => setFormData({ ...formData, sendWelcomeEmail: !!checked })}
-                  />
-                  <Label htmlFor="welcome" className="text-sm font-normal">
-                    Send welcome email with login instructions
-                  </Label>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreateUser} disabled={!formData.name || !formData.email}>
-                  Create User
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Button variant="outline" onClick={() => void load()} disabled={isLoading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Total Users</p>
+      {denied ? (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="pt-6 text-sm text-amber-900">
+            You don&apos;t have permission to list users. This is enforced by the server, not just hidden in the interface.
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-            <p className="text-xs text-muted-foreground">Active</p>
-          </CardContent>
+      ) : error ? (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="pt-6 text-sm text-red-800">{error}</CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Pending</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-orange-600">{stats.suspended}</div>
-            <p className="text-xs text-muted-foreground">Suspended</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-blue-600">{stats.students}</div>
-            <p className="text-xs text-muted-foreground">Students</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-indigo-600">{stats.instructors}</div>
-            <p className="text-xs text-muted-foreground">Instructors</p>
-          </CardContent>
-        </Card>
-      </div>
+      ) : null}
 
-      {/* Filters and Search */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="student">Students</SelectItem>
-                  <SelectItem value="instructor">Instructors</SelectItem>
-                  <SelectItem value="admin">Admins</SelectItem>
-                  <SelectItem value="super_admin">Super Admins</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="banned">Banned</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={countryFilter} onValueChange={setCountryFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Country" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Countries</SelectItem>
-                  {countries.map(country => (
-                    <SelectItem key={country} value={country}>{country}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <CardHeader>
+          <CardTitle>Directory</CardTitle>
+          <CardDescription>
+            Staff and student records are managed on their own pages.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or email…"
+                className="pl-9"
+              />
             </div>
-            
-            {selectedUsers.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {selectedUsers.length} selected
-                </span>
-                <Select value={bulkAction} onValueChange={(v) => { setBulkAction(v); setIsBulkActionOpen(true); }}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Bulk action" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="activate">Activate</SelectItem>
-                    <SelectItem value="suspend">Suspend</SelectItem>
-                    <SelectItem value="verify">Verify Email</SelectItem>
-                    <SelectItem value="delete">Delete</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <Select value={portalFilter} onValueChange={setPortalFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All portals" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All portals</SelectItem>
+                {portals.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {PORTAL_LABELS[p] ?? p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Users Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox 
-                      checked={selectedUsers.length === paginatedUsers.length && paginatedUsers.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
                   <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Email Verified</TableHead>
-                  <TableHead>Joined</TableHead>
+                  <TableHead>Portal</TableHead>
+                  <TableHead>Roles (determine permissions)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <Checkbox 
-                        checked={selectedUsers.includes(user.id)}
-                        onCheckedChange={() => toggleSelectUser(user.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`} />
-                          <AvatarFallback>{user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getRoleColor(user.role)}>
-                        {user.role.replace('_', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{user.country}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(user.status)}>
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {user.emailVerified ? (
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </TableCell>
-                    <TableCell>{new Date(user.joinedAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openViewDialog(user)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit User
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Mail className="h-4 w-4 mr-2" />
-                            Send Email
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Key className="h-4 w-4 mr-2" />
-                            Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {user.status === 'active' ? (
-                            <DropdownMenuItem 
-                              onClick={() => handleStatusChange(user.id, 'suspended')}
-                              className="text-orange-600"
-                            >
-                              <Ban className="h-4 w-4 mr-2" />
-                              Suspend
-                            </DropdownMenuItem>
-                          ) : user.status === 'suspended' ? (
-                            <DropdownMenuItem 
-                              onClick={() => handleStatusChange(user.id, 'active')}
-                              className="text-green-600"
-                            >
-                              <UserCheck className="h-4 w-4 mr-2" />
-                              Activate
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuItem 
-                            onClick={() => openDeleteDialog(user)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete User
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      Loading users…
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : denied ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      Not permitted to list users.
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      {users.length === 0 ? 'No users found.' : 'No users match your search.'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="font-medium">
+                          {`${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || '—'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{u.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={PORTAL_BADGE[u.role] ?? 'bg-slate-100 text-slate-800'}
+                        >
+                          {PORTAL_LABELS[u.role] ?? u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(u.roles ?? []).length === 0 ? (
+                          <span className="text-sm text-muted-foreground">No roles assigned</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {(u.roles ?? []).map((r) => (
+                              <Badge key={r.id} variant="outline">
+                                {r.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href="/admin/users/staff">
+                              <UserCog className="mr-2 h-4 w-4" /> Staff
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href="/admin/users/students">
+                              <Users className="mr-2 h-4 w-4" /> Students
+                            </Link>
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openAssign(u)}>
+                            <ShieldCheck className="mr-2 h-4 w-4" /> Roles
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-4 py-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Edit User Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+      <Dialog open={!!assignTarget} onOpenChange={(open) => !open && setAssignTarget(null)}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle>Assign roles</DialogTitle>
             <DialogDescription>
-              Update user information and permissions.
+              {assignTarget
+                ? `Choose which roles apply to ${`${assignTarget.first_name ?? ''} ${assignTarget.last_name ?? ''}`.trim()}. Permissions are the union of every selected role.`
+                : ''}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Full Name</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-email">Email Address</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-role">Role</Label>
-                <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v as User['role'] })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="instructor">Instructor</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="super_admin">Super Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as User['status'] })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
-                    <SelectItem value="banned">Banned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-country">Country</Label>
-                <Select value={formData.country} onValueChange={(v) => setFormData({ ...formData, country: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries.map(country => (
-                      <SelectItem key={country} value={country}>{country}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-phone">Phone</Label>
-                <Input
-                  id="edit-phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-            </div>
+
+          <div className="space-y-3 py-2">
+            {roles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Loading roles…</p>
+            ) : (
+              roles.map((role) => (
+                <label
+                  key={role.id}
+                  className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/40"
+                >
+                  <Checkbox
+                    checked={assignRoleIds.includes(role.id)}
+                    onCheckedChange={(on) =>
+                      setAssignRoleIds((prev) =>
+                        on ? [...prev, role.id] : prev.filter((id) => id !== role.id)
+                      )
+                    }
+                  />
+                  <div>
+                    <div className="text-sm font-medium">
+                      {role.name}
+                      {role.is_system && (
+                        <Badge variant="outline" className="ml-2">
+                          system
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              ))
+            )}
+            {assignError && <p className="text-sm text-red-600">{assignError}</p>}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-            <Button onClick={handleUpdateUser}>Save Changes</Button>
+            <Button variant="outline" onClick={() => setAssignTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveAssign} disabled={assignSaving}>
+              {assignSaving ? 'Saving…' : 'Save roles'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* View User Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>User Details</DialogTitle>
-          </DialogHeader>
-          {selectedUser && (
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedUser.name}`} />
-                  <AvatarFallback>{selectedUser.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-lg font-semibold">{selectedUser.name}</h3>
-                  <p className="text-muted-foreground">{selectedUser.email}</p>
-                  <div className="flex gap-2 mt-2">
-                    <Badge className={getRoleColor(selectedUser.role)}>
-                      {selectedUser.role.replace('_', ' ')}
-                    </Badge>
-                    <Badge className={getStatusColor(selectedUser.status)}>
-                      {selectedUser.status}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Country</p>
-                  <p className="font-medium">{selectedUser.country}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-medium">{selectedUser.phone || 'Not provided'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Joined</p>
-                  <p className="font-medium">{new Date(selectedUser.joinedAt).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Last Login</p>
-                  <p className="font-medium">{selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleDateString() : 'Never'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Email Verified</p>
-                  <p className="font-medium">{selectedUser.emailVerified ? 'Yes' : 'No'}</p>
-                </div>
-                {selectedUser.role === 'student' && (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Courses Enrolled</p>
-                      <p className="font-medium">{selectedUser.coursesEnrolled || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Spent</p>
-                      <p className="font-medium">{formatCurrency(selectedUser.totalSpent || 0)}</p>
-                    </div>
-                  </>
-                )}
-                {selectedUser.role === 'instructor' && (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Courses Created</p>
-                      <p className="font-medium">{selectedUser.coursesCreated || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Earned</p>
-                      <p className="font-medium">{formatCurrency(selectedUser.totalEarned || 0)}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => { setIsViewOpen(false); openEditDialog(selectedUser); }}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Send Email
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Key className="h-4 w-4 mr-2" />
-                  Reset Password
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedUser?.name}? This action cannot be undone.
-              All their data, including enrollments and progress, will be permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Bulk Action Confirmation Dialog */}
-      <AlertDialog open={isBulkActionOpen} onOpenChange={setIsBulkActionOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Action</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to {bulkAction} {selectedUsers.length} selected users?
-              {bulkAction === 'delete' && ' This action cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setBulkAction('')}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleBulkAction}
-              className={bulkAction === 'delete' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
-            >
-              Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

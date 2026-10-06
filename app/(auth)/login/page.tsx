@@ -17,7 +17,7 @@ import { useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, verifyTwoFactor, isLoading, error, user } = useAuth();
+  const { login, verifyTwoFactor, isLoading, error, user, canAccessAdminPanel, canAccessInstructorRoutes, canAccessAccountantRoutes } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   
   const [email, setEmail] = useState('');
@@ -46,40 +46,40 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const getRedirectPath = (userRole: string) => {
-    // Admin users go to admin dashboard
-    if (userRole === 'admin') {
-      return '/admin';
-    }
-    // Instructors go to instructor dashboard
-    if (userRole === 'instructor') {
-      return '/instructor';
-    }
-    // Accountants go to accountant dashboard
-    if (userRole === 'accountant') {
-      return '/accountant/dashboard';
-    }
-    // Default: students go to student dashboard
+  /**
+   * Where to land after sign-in. Permissions decide, not the legacy `role`
+   * column: a user whose roles grant no admin access should not be pushed into
+   * /admin just because their `role` string says "admin".
+   */
+  /**
+   * Fallback only. `login()` returns the destination it computed from the
+   * profile it just fetched; reading `user`/the `canAccess*` helpers here
+   * would read the pre-login render, because setState has not been committed
+   * yet, and send every fresh login to /dashboard.
+   */
+  const getRedirectPath = () => {
+    if (!user) return '/dashboard';
+    if (canAccessAdminPanel()) return '/admin';
+    if (canAccessInstructorRoutes()) return '/instructor';
+    if (canAccessAccountantRoutes()) return '/accountant/dashboard';
     return '/dashboard';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
-    
+
     if (!validateForm()) return;
-    
+
     const result = await login(email, password);
-    
+
     if (result.requiresTwoFactor) {
       setShowTwoFactor(true);
       return;
     }
-    
+
     if (result.success) {
-      // Redirect based on user role returned from login
-      const redirectPath = getRedirectPath(result.userRole || 'student');
-      router.push(redirectPath);
+      router.push(result.redirectTo ?? getRedirectPath());
     } else {
       setMessage(result.message);
     }
@@ -87,13 +87,11 @@ export default function LoginPage() {
 
   const handleTwoFactor = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const result = await verifyTwoFactor(twoFactorCode);
-    
+
     if (result.success) {
-      // Redirect based on user role/email
-      const redirectPath = getRedirectPath(email);
-      router.push(redirectPath);
+      router.push(result.redirectTo ?? getRedirectPath());
     } else {
       setMessage(result.message);
     }
@@ -247,12 +245,7 @@ export default function LoginPage() {
                   </Field>
                   
                   <Field>
-                    <div className="flex items-center justify-between">
-                      <FieldLabel>Password</FieldLabel>
-                      <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                        Forgot password?
-                      </Link>
-                    </div>
+                    <FieldLabel>Password</FieldLabel>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input

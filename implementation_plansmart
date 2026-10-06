@@ -1,0 +1,244 @@
+# SmartLand — Land Verification & Management System
+
+## Overview
+
+SmartLand is a mobile-first web application designed to combat land fraud in Tanzania/Zanzibar by providing a digital land registry with unique Land Codes and QR verification. Citizens can verify land ownership before purchasing, Land Officers manage the registry, and Administrators oversee the entire platform.
+
+**Stack**: React 19 + Vite + Tailwind CSS v4 + React Router — hosted as a static PWA (Progressive Web App) that works on both mobile and desktop browsers.
+
+---
+
+## Architecture
+
+```
+SmartLand App (PWA)
+├── Landing Page (Login/Register)
+├── Citizen Dashboard (Mobile-first)
+│   ├── Home Dashboard (Cards + Quick Actions)
+│   ├── Verify Land (Code input + QR Scanner)
+│   ├── Land Details Page
+│   ├── Map View (Leaflet.js)
+│   ├── Verification History
+│   ├── Saved Lands
+│   └── Report Fraud
+├── Land Owner Dashboard
+│   ├── My Lands
+│   ├── Request Changes
+│   └── Download Documents
+├── Land Officer Dashboard (Desktop-oriented)
+│   ├── Overview Stats (Cards)
+│   ├── Register New Land
+│   ├── Pending Approvals
+│   ├── Disputes Management
+│   └── GIS Map View
+└── Admin Dashboard (Desktop-oriented)
+    ├── System Overview (Cards + Charts)
+    ├── User Management
+    ├── Revenue Analytics
+    ├── All Lands Registry
+    └── Fraud Reports
+```
+
+---
+
+## User Roles & Dashboards
+
+| Role | Primary Device | Key Features |
+|------|---------------|-------------|
+| **Citizen** | Mobile | Verify by code/QR, view land details, save/report |
+| **Land Owner** | Mobile/Web | Manage own lands, download docs, track history |
+| **Land Officer** | Web | Register lands, approve changes, manage disputes |
+| **Administrator** | Web | Full system control, revenue analytics, user mgmt |
+
+---
+
+## Proposed Pages & Components
+
+### 1. Landing / Auth Page
+- Animated hero with SmartLand logo
+- Login form with role selector
+- Demo accounts for each role
+- Tagline: *"Verify Before You Buy"*
+
+### 2. Citizen Dashboard (Mobile-first)
+**Top Section:**
+- Greeting card with user avatar
+- Quick verification search bar (prominent)
+
+**Cards Row:**
+- ✅ Verified Lands (count)
+- 📜 Verification History
+- ⭐ Saved Properties
+- 🔔 Notifications (badge)
+
+**Quick Actions Grid:**
+- 🔍 Verify Land (Code input)
+- 📷 Scan QR Code
+- 📍 View Map
+- 📋 My History
+- 🚨 Report Fraud
+- 👤 My Profile
+
+**Recent Verifications List** (last 3)
+
+### 3. Land Verification Flow
+- Code input with real-time formatting (ZNZ-2026-XXXX)
+- OR QR code scanner modal
+- Loading animation → Results
+
+**Land Details Card:**
+- Plot number, Owner name, Location, Size
+- Status badge (Verified ✅ / In Dispute ⚠️ / Unregistered ❌)
+- Interactive mini-map
+- Action buttons: View Map | Download Report | Save | Report Issue
+
+### 4. Land Officer Dashboard (Web)
+**Header Cards (4):**
+- Total Registered Lands
+- Pending Approvals
+- Active Disputes
+- This Month Registrations
+
+**Charts:**
+- Bar chart: Lands registered per month
+- Pie chart: Land status distribution
+- Line chart: Verification requests trend
+
+**Sidebar Navigation:**
+- Dashboard, Lands Registry, Approvals, GIS Maps, Disputes, Reports, Settings
+
+**Land Registration Form:**
+- Plot number (auto-generated)
+- Owner details
+- Location (coordinates)
+- Size (sqm/acres)
+- Documents upload
+- Map pin placement
+
+### 5. Admin Dashboard
+**Header Cards (5):**
+- Total Users, Total Lands, Monthly Verifications, Revenue Generated, Fraud Reports
+
+**Revenue Analytics Chart** (line chart, monthly income)
+
+**User Management Table** (with role badges, status, actions)
+
+**Recent Activity Feed** (live-like with timestamps)
+
+---
+
+## Design System
+
+- **Primary Color**: `#1B4F72` (Deep Ocean Blue — trust, authority)
+- **Accent**: `#27AE60` (Verified Green — success, nature)
+- **Warning**: `#F39C12` (Amber — caution, disputes)
+- **Danger**: `#C0392B` (Red — fraud alerts)
+- **Background**: `#0D1B2A` (Dark Navy) / `#F0F4F8` (Light mode)
+- **Typography**: Inter (Google Fonts)
+- **Style**: Dark glassmorphism cards with subtle gradients, mobile-first responsive
+
+---
+
+## Technical Features
+
+- **PWA** — installable on mobile like a native app
+- **QR Code Scanner** — using device camera (html5-qrcode library CDN)
+- **Interactive Maps** — Leaflet.js with OpenStreetMap tiles
+- **Charts** — Chart.js for analytics
+- **Local State** — JavaScript mock data (JSON) simulating a real API
+- **Role-based routing** — JavaScript SPA with page switching
+
+---
+
+## File Structure
+
+```
+smartland/
+├── index.html
+├── vite.config.js
+├── tailwind.config.js
+├── public/
+│   ├── manifest.json        (PWA manifest)
+│   └── sw.js               (Service worker)
+└── src/
+    ├── main.jsx
+    ├── App.jsx              (Router + role-based routing)
+    ├── index.css            (Tailwind v4 imports + custom)
+    ├── data/
+    │   └── mockData.js      (Mock database — lands, users, stats)
+    ├── context/
+    │   └── AuthContext.jsx  (Auth state + current user role)
+    ├── pages/
+    │   ├── LoginPage.jsx
+    │   ├── citizen/
+    │   │   ├── CitizenDashboard.jsx
+    │   │   ├── VerifyLand.jsx
+    │   │   ├── LandDetails.jsx
+    │   │   ├── SavedLands.jsx
+    │   │   └── ReportFraud.jsx
+    │   ├── owner/
+    │   │   └── OwnerDashboard.jsx
+    │   ├── officer/
+    │   │   ├── OfficerDashboard.jsx
+    │   │   ├── RegisterLand.jsx
+    │   │   ├── PendingApprovals.jsx
+    │   │   └── DisputesPage.jsx
+    │   └── admin/
+    │       ├── AdminDashboard.jsx
+    │       ├── UserManagement.jsx
+    │       └── RevenueAnalytics.jsx
+    └── components/
+        ├── ui/              (Reusable UI components)
+        ├── StatCard.jsx
+        ├── LandCard.jsx
+        ├── MapView.jsx      (Leaflet map)
+        ├── QRScanner.jsx    (Camera QR scanner)
+        ├── Charts.jsx       (Chart.js wrappers)
+        └── Sidebar.jsx
+```
+
+---
+
+## Demo Accounts (for showcase)
+
+| Role | Email | Password |
+|------|-------|---------|
+| Citizen | citizen@smartland.co.tz | demo123 |
+| Land Owner | owner@smartland.co.tz | demo123 |
+| Land Officer | officer@smartland.co.tz | demo123 |
+| Admin | admin@smartland.co.tz | demo123 |
+
+---
+
+## Sample Land Codes
+
+| Code | Status |
+|------|--------|
+| ZNZ-2026-0001 | ✅ Verified |
+| ZNZ-2026-0042 | ⚠️ In Dispute |
+| ZNZ-2026-0099 | ✅ Verified |
+| ZNZ-2026-0150 | 🔴 Fraud Alert |
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Language**: Should the UI text be in **English**, **Swahili**, or **bilingual (English + Swahili)**? I recommend bilingual for a showcase.
+
+> [!IMPORTANT]
+> **Location**: Should the sample data use **Zanzibar** specifically, or **Tanzania mainland** locations, or both?
+
+> [!NOTE]
+> **Payment UI**: Should I include a mock payment flow (M-Pesa integration UI) for the verification fee, or just show it as a concept?
+
+---
+
+## Verification Plan
+
+After building, I will:
+1. Test all 4 user role dashboards are accessible via demo login
+2. Verify land code lookup works with sample codes
+3. Confirm charts and maps render correctly
+4. Check mobile responsiveness on narrow viewport
+5. Validate QR code scanner modal opens (camera permission flow)

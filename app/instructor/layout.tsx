@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { AuthLoadingScreen } from '@/components/auth/permission-guard';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
@@ -29,15 +30,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/instructor', icon: LayoutDashboard },
-  { name: 'My Courses', href: '/instructor/courses', icon: GraduationCap },
-  { name: 'Results', href: '/instructor/results', icon: FileText },
-];
+  { name: 'Dashboard', href: '/instructor', icon: LayoutDashboard, module: 'dashboard', action: 'view' },
+  { name: 'My Courses', href: '/instructor/courses', icon: GraduationCap, module: 'courses', action: 'view' },
+  { name: 'Results', href: '/instructor/results', icon: FileText, module: 'results', action: 'view' },
+] as const;
 
 export default function InstructorLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, can, isAuthenticated, isLoading, canAccessInstructorRoutes } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -45,16 +46,31 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
     setMounted(true);
   }, []);
 
+  // Loading first, then authenticated, then authorized — same order as /admin.
+  useEffect(() => {
+    if (!mounted || isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+    if (!canAccessInstructorRoutes()) {
+      router.replace('/dashboard');
+    }
+  }, [mounted, isLoading, isAuthenticated, canAccessInstructorRoutes, router]);
+
   const handleLogout = async () => {
     await logout();
   };
+
+  const visibleNavigation = navigation.filter((item) => can(item.module, item.action));
 
   const isActivePath = (href: string) => {
     if (href === '/instructor') return pathname === '/instructor';
     return pathname === href || pathname.startsWith(href + '/');
   };
 
-  if (!mounted) return null;
+  if (!mounted || isLoading) return <AuthLoadingScreen />;
+  if (!isAuthenticated || !canAccessInstructorRoutes()) return null;
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
@@ -71,7 +87,7 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
       </div>
 
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const active = isActivePath(item.href);
           return (
             <Link

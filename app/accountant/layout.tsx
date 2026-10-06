@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { AuthLoadingScreen } from '@/components/auth/permission-guard';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
@@ -29,31 +30,50 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+/** Canonical permission codes only — "Fees & Payments" is a single `fees` module. */
 const navigation = [
-  { name: 'Dashboard', href: '/accountant/dashboard', icon: LayoutDashboard },
-  { name: 'Payments', href: '/accountant/payments', icon: DollarSign },
-  { name: 'Student Fees', href: '/accountant/student-fees', icon: Users },
-  { name: 'Reports', href: '/accountant/reports', icon: BarChart3 },
-];
+    { name: 'Dashboard', href: '/accountant/dashboard', icon: LayoutDashboard, module: 'dashboard', action: 'view' },
+    { name: 'Payments', href: '/accountant/payments', icon: DollarSign, module: 'fees', action: 'view' },
+    { name: 'Student Fees', href: '/accountant/student-fees', icon: Users, module: 'fees', action: 'view' },
+    { name: 'Reports', href: '/accountant/reports', icon: BarChart3, module: 'reports', action: 'view' },
+] as const;
 
 export default function AccountantLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+    const pathname = usePathname();
+    const router = useRouter();
+    const { user, logout, can, isAuthenticated, isLoading, canAccessAccountantRoutes } = useAuth();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
-  const handleLogout = async () => {
-    await logout();
-  };
+    // Loading first, then authenticated, then authorized.
+    useEffect(() => {
+        if (!mounted || isLoading) return;
+        if (!isAuthenticated) {
+            router.replace('/login');
+            return;
+        }
+        if (!canAccessAccountantRoutes()) {
+            router.replace('/dashboard');
+        }
+    }, [mounted, isLoading, isAuthenticated, canAccessAccountantRoutes, router]);
 
-  if (!mounted) {
-    return null;
-  }
+    const handleLogout = async () => {
+        await logout();
+    };
+
+    const visibleNavigation = navigation.filter((item) => can(item.module, item.action));
+
+    if (!mounted || isLoading) {
+        return <AuthLoadingScreen />;
+    }
+
+    if (!isAuthenticated || !canAccessAccountantRoutes()) {
+        return null;
+    }
 
   return (
     <div className="min-h-screen bg-slate-50/50">
@@ -70,7 +90,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
               </Link>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {navigation.map((item) => {
+              {visibleNavigation.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
@@ -120,7 +140,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
             </Link>
           </div>
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
+            {visibleNavigation.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link

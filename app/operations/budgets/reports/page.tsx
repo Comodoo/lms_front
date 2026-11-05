@@ -38,9 +38,9 @@ export default function BudgetReportsPage() {
     if (fy) params.fiscal_year_id = fy;
     if (dept) params.department_id = dept;
     const vRes: any = await budgetApi.getVariance(params);
-    setVariance(vRes.data || []);
+    setVariance(vRes.data?.data || vRes.data || []);
     const sRes: any = await budgetApi.getDepartmentSummary(params);
-    setSummary(sRes.data || []);
+    setSummary(sRes.data?.data || sRes.data || []);
   };
 
   useEffect(() => { load(); }, []);

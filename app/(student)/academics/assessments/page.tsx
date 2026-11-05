@@ -44,7 +44,7 @@ export default function AssessmentsPage() {
   useEffect(() => {
     async function fetchAssessments() {
       try {
-        const response = await apiClient.getStudentResults();
+        const response: any = await apiClient.getStudentResults();
         const { results } = response as any;
         if (!results) return;
 

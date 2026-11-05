@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { authApi } from './api';
 import { generateId } from './sample-data';
 
-export type UserRole = 'student' | 'instructor' | 'admin' | 'accountant';
+export type UserRole = 'student' | 'instructor' | 'admin' | 'accountant' | 'operations';
 
 export interface AuthUser {
   id: string;
@@ -73,10 +73,12 @@ export interface AuthContextType extends AuthState {
   isInstructor: () => boolean;
   isAdmin: () => boolean;
   isAccountant: () => boolean;
+  isOperations: () => boolean;
   canAccessStudentRoutes: () => boolean;
   canAccessInstructorRoutes: () => boolean;
   canAccessAdminRoutes: () => boolean;
   canAccessAccountantRoutes: () => boolean;
+  canAccessOperationsRoutes: () => boolean;
   /** Dynamic permission check: can(module, action) */
   can: (module: string, action: string) => boolean;
   /** Dynamic permission check: canAny(module, ['view','create']) */
@@ -84,11 +86,14 @@ export interface AuthContextType extends AuthState {
 }
 
 export interface SignupData {
-  name: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
   email: string;
   password: string;
-  role: UserRole;
-  acceptTerms: boolean;
+  password_confirmation?: string;
+  role?: UserRole;
+  acceptTerms?: boolean;
   adminCode?: string; // Required for admin signup
 }
 
@@ -235,7 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const response = await authApi.login(email, password);
+      const response: any = await authApi.login(email, password);
       
       if (response.error) {
         setState(prev => ({ ...prev, isLoading: false, error: response.error || null }));
@@ -294,7 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const response = await authApi.register(data);
+      const response: any = await authApi.register(data);
       
       if (response.error) {
         setState(prev => ({ ...prev, isLoading: false, error: response.error || null }));
@@ -558,6 +563,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return state.user?.role === 'accountant';
   }, [state.user]);
 
+  const isOperations = useCallback((): boolean => {
+    return state.user?.role === 'operations';
+  }, [state.user]);
+
   const canAccessStudentRoutes = useCallback((): boolean => {
     return state.user?.role === 'student';
   }, [state.user]);
@@ -586,6 +595,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return state.user?.role === 'accountant' || state.user?.role === 'admin';
   }, [state.user]);
 
+  const canAccessOperationsRoutes = useCallback((): boolean => {
+    return state.user?.role === 'operations' || state.user?.role === 'admin';
+  }, [state.user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -610,12 +623,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInstructor,
         isAdmin,
         isAccountant,
+        isOperations,
         canAccessStudentRoutes,
         canAccessInstructorRoutes,
         canAccessAdminRoutes,
         can,
         canAny,
         canAccessAccountantRoutes,
+        canAccessOperationsRoutes,
       }}
     >
       {children}

@@ -53,7 +53,7 @@ export default function ResultDetailPage() {
   }, [params.id]);
 
   const loadResult = async () => {
-    const data = await getExamResultById(params.id as string);
+    const data: any = await getExamResultById(params.id as string);
     if (data) {
       setResult(data);
       form.reset({

@@ -438,6 +438,7 @@ export const db = {
   },
   
   enrollments: {
+    findAll: () => Array.from(enrollments.values()),
     findById: (id: string) => enrollments.get(id) || null,
     findByUser: (userId: string) => Array.from(enrollments.values()).filter(e => e.userId === userId),
     findByCourse: (courseId: string) => Array.from(enrollments.values()).filter(e => e.courseId === courseId),

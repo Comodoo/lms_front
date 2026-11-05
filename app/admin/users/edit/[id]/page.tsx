@@ -58,7 +58,7 @@ export default function EditStudentPage() {
   const loadStudent = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.getRegistration(params.id as string);
+      const data: any = await apiClient.getRegistration(params.id as string);
       if (data) {
         form.reset({
           firstName: data.firstName || '',
@@ -100,7 +100,7 @@ export default function EditStudentPage() {
         guardian_phone: data.guardianPhone,
       };
       
-      const response = await registrationsApi.update(params.id as string, payload);
+      const response: any = await registrationsApi.update(params.id as string, payload);
       
       if (response.error) {
         throw new Error(response.error);

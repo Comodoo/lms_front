@@ -22,7 +22,7 @@ export default function StudentResultsPage() {
   useEffect(() => {
     async function loadResults() {
       try {
-        const response = await apiClient.getStudentResults();
+        const response: any = await apiClient.getStudentResults();
         const { results, summary } = response as any;
         const grouped = groupResults(results);
         setResultsData(grouped);

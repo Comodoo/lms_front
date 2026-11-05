@@ -106,8 +106,8 @@ export default function AdminProgramsPage() {
                 apiClient.getPrograms(),
                 apiClient.getDepartments(),
             ]);
-            setPrograms(programsRes || []);
-            setDepartments(deptsRes || []);
+            setPrograms((programsRes as any) || []);
+            setDepartments((deptsRes as any) || []);
         } catch (err: any) {
             setError(err.message || 'Failed to load data');
         }

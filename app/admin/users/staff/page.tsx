@@ -119,7 +119,7 @@ export default function AdminStaffPage() {
   const fetchRoles = async () => {
     if (!can('roles', 'view')) return;
     try {
-      const res = await rolesApi.getAll();
+      const res: any = await rolesApi.getAll();
       if (res.data) {
         setAllRoles(res.data as unknown as RoleRecord[]);
       }
@@ -132,7 +132,7 @@ export default function AdminStaffPage() {
     setIsLoading(true);
     try {
       const page = reset ? 1 : nextPage;
-      const res = await staffApi.getAll(undefined, { page, per_page: PER_PAGE });
+      const res: any = await staffApi.getAll(undefined, { page, per_page: PER_PAGE });
       const data = res.data as unknown as Paginated<Staff> | undefined;
 
       if (reset) {
@@ -201,7 +201,7 @@ export default function AdminStaffPage() {
     }
 
     try {
-      const res = await staffApi.create(form);
+      const res: any = await staffApi.create(form);
       if (res.error) {
         setFormError(res.error);
         return;
@@ -240,7 +240,7 @@ export default function AdminStaffPage() {
     }
 
     try {
-      const res = await staffApi.update(selectedStaff.id, payload);
+      const res: any = await staffApi.update(selectedStaff.id, payload);
       if (res.error) {
         setFormError(res.error);
         return;
@@ -707,7 +707,7 @@ export default function AdminStaffPage() {
                 setAssignSaving(true);
                 setAssignError(null);
                 try {
-                  const res = await rolesApi.assignRoles(assignTarget.id, assignRoleIds);
+                  const res: any = await rolesApi.assignRoles(assignTarget.id, assignRoleIds);
                   if (res.error) {
                     setAssignError(res.error);
                     return;

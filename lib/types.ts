@@ -42,6 +42,8 @@ export interface Course {
   sections: Section[];
   /** Team member IDs assigned to co-manage this course */
   assignedUserIds?: string[];
+  /** Instructor assignments loaded from backend */
+  instructor_assignments?: any[];
   createdAt: Date;
   updatedAt: Date;
 }

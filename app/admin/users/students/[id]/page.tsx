@@ -22,7 +22,7 @@ export default function StudentProfilePage() {
     setLoading(true);
     try {
       // The id in the URL is actually the registration ID (which maps to student profile)
-      const data = await apiClient.getRegistration(params.id as string);
+      const data: any = await apiClient.getRegistration(params.id as string);
       setStudent(data);
     } catch (error) {
       console.error('Failed to load student profile', error);

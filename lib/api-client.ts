@@ -89,7 +89,7 @@ export async function register(data: {
   date_of_birth?: string;
   gender?: 'male' | 'female' | 'other';
 }) {
-  const response = await apiRequest<{
+  const response: any = await apiRequest<{
     user: any;
     token: string;
     token_type: string;
@@ -103,7 +103,7 @@ export async function register(data: {
 }
 
 export async function login(email: string, password: string) {
-  const response = await apiRequest<{
+  const response: any = await apiRequest<{
     user: any;
     token: string;
     token_type: string;
@@ -235,9 +235,9 @@ async function fetchAllPages(endpoint: string, perPage = 200): Promise<any[]> {
 }
 
 export async function getRegistrations(status?: string) {
-  const data = await fetchAllPages(status ? `/registrations?status=${status}` : '/registrations');
+  const data: any = await fetchAllPages(status ? `/registrations?status=${status}` : '/registrations');
 
-  return data.map(reg => ({
+  return data.map((reg: any) => ({
     ...reg,
     firstName: reg.first_name,
     lastName: reg.last_name,
@@ -420,7 +420,7 @@ export async function verifyCashPayment(id: number | string) {
 }
 
 export async function getPaymentsByRegistration(registrationId: number | string) {
-  const data = await apiRequest<any[]>(`/registrations/${registrationId}/payments`);
+  const data: any = await apiRequest<any[]>(`/registrations/${registrationId}/payments`);
   
   if (!Array.isArray(data)) {
     return [];

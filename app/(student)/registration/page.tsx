@@ -242,14 +242,14 @@ export default function RegistrationPage() {
 
   useEffect(() => {
     if (selectedProgramId) {
-      apiClient.getFees(selectedProgramId).then(data => {
+      apiClient.getFees(selectedProgramId).then((data: any) => {
         setApplicableFees(data || []);
       }).catch(err => {
         console.error('Failed to fetch fees:', err);
         setApplicableFees([]);
       });
     } else {
-      apiClient.getFees().then(data => {
+      apiClient.getFees().then((data: any) => {
         // Just direct fees
         setApplicableFees((data || []).filter((f: any) => f.type === 'direct'));
       }).catch(() => setApplicableFees([]));
@@ -924,8 +924,8 @@ export default function RegistrationPage() {
                     <h3 className="font-semibold mb-3">Program Selection</h3>
                     <div className="text-sm">
                       <p><strong>Program:</strong> {selectedProgram?.name}</p>
-                      <p><strong>Intake:</strong> {form.watch('intake')}</p>
-                      <p><strong>Study Mode:</strong> {form.watch('studyMode')}</p>
+                      <p><strong>Intake:</strong> {(form as any).watch('intake')}</p>
+                      <p><strong>Study Mode:</strong> {(form as any).watch('studyMode')}</p>
                       <p><strong>Tuition Fee:</strong> {selectedProgram?.currency} {((selectedProgram as any)?.tuitionFee || (selectedProgram as any)?.tuition_fee || 0).toLocaleString()}</p>
                     </div>
                   </div>

@@ -37,7 +37,7 @@ export default function InstructorProfilePage() {
     const loadStats = async () => {
       try {
         const coursesRes = await coursesApi.getMyCourses().catch(() => ({ data: [] }));
-        const fetchedCourses = coursesRes.data || [];
+        const fetchedCourses = (coursesRes as any).data || [];
         setCoursesCount(fetchedCourses.length);
         
         // Mock student count based on courses

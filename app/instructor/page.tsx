@@ -73,19 +73,19 @@ export default function InstructorDashboard() {
         apiClient.getRegistrations().catch(() => [])
       ]);
       
-      const fetchedCourses = coursesRes.data || [];
-      setCourses(fetchedCourses);
+      const fetchedCourses = (coursesRes as any).data || [];
+      setCourses(fetchedCourses as any);
 
       // Calculate real student count:
       // A student is considered in this instructor's courses if their program_id matches
       // the program_id of any course the instructor teaches.
       const instructorProgramIds = new Set(
         fetchedCourses
-          .filter(c => c.program_id)
-          .map(c => String(c.program_id))
+          .filter((c: any) => c.program_id)
+          .map((c: any) => String(c.program_id))
       );
       
-      const uniqueStudents = registrations.filter(reg => instructorProgramIds.has(String(reg.programId)));
+      const uniqueStudents =  (registrations as any[]).filter((reg: any) => instructorProgramIds.has(String(reg.programId)));
       setStudentsCount(uniqueStudents.length);
       
     } catch (err) {

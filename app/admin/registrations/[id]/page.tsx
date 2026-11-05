@@ -63,7 +63,7 @@ export default function RegistrationDetailPage() {
 
   const loadRegistration = async () => {
     setLoading(true);
-    const data = await getRegistrationById(params.id as string);
+    const data: any = await getRegistrationById(params.id as string);
     if (data) {
       setRegistration(data);
       form.reset({
@@ -351,23 +351,23 @@ export default function RegistrationDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Previous School</p>
-                  <p className="font-medium">{registration.previousSchool}</p>
+                  <p className="font-medium">{(registration as any).previousSchool}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Year of Completion</p>
-                  <p className="font-medium">{registration.yearOfCompletion}</p>
+                  <p className="font-medium">{(registration as any).yearOfCompletion}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Examination Board</p>
-                  <p className="font-medium">{registration.examinationBoard}</p>
+                  <p className="font-medium">{(registration as any).examinationBoard}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Index Number</p>
-                  <p className="font-medium">{registration.indexNumber}</p>
+                  <p className="font-medium">{(registration as any).indexNumber}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">School Address</p>
-                  <p className="font-medium">{registration.previousSchoolAddress}</p>
+                  <p className="font-medium">{(registration as any).previousSchoolAddress}</p>
                 </div>
               </div>
             </CardContent>
@@ -585,7 +585,7 @@ export default function RegistrationDetailPage() {
           </Card>
 
           {/* Payment Card */}
-          {registration.payment && (
+          {(registration as any).payment || (registration as any).payments?.[0] && (
             <Card>
               <CardHeader>
                 <CardTitle>Payment Details</CardTitle>
@@ -594,23 +594,23 @@ export default function RegistrationDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Amount</span>
                   <span className="font-bold">
-                    {registration.payment.currency} {registration.payment.amount.toLocaleString()}
+                    {(registration as any).payment || (registration as any).payments?.[0].currency} {(registration as any).payment || (registration as any).payments?.[0].amount.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Method</span>
-                  <span className="font-medium capitalize">{registration.payment.method.replace('_', ' ')}</span>
+                  <span className="font-medium capitalize">{(registration as any).payment || (registration as any).payments?.[0].method.replace('_', ' ')}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Status</span>
-                  <Badge variant={registration.payment.status === 'completed' ? 'default' : 'secondary'}>
-                    {registration.payment.status}
+                  <Badge variant={(registration as any).payment || (registration as any).payments?.[0].status === 'completed' ? 'default' : 'secondary'}>
+                    {(registration as any).payment || (registration as any).payments?.[0].status}
                   </Badge>
                 </div>
-                {registration.payment.transactionId && (
+                {(registration as any).payment || (registration as any).payments?.[0].transactionId && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Transaction ID</span>
-                    <span className="font-medium">{registration.payment.transactionId}</span>
+                    <span className="font-medium">{(registration as any).payment || (registration as any).payments?.[0].transactionId}</span>
                   </div>
                 )}
               </CardContent>

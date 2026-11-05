@@ -57,7 +57,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
   const fetchPrograms = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getPrograms();
+      const data: any = await apiClient.getPrograms();
       // Transform Laravel data to frontend format
       const transformedPrograms: Program[] = data.map((p: any) => ({
         id: String(p.id),
@@ -83,7 +83,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
   const fetchDepartments = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getDepartments();
+      const data: any = await apiClient.getDepartments();
       setDepartments(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch departments');
@@ -96,7 +96,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
   const fetchRegistrations = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getRegistrations();
+      const data: any = await apiClient.getRegistrations();
       // Transform Laravel data to frontend format
       const transformedRegistrations: StudentRegistration[] = data.map((r: any) => ({
         id: String(r.id),
@@ -262,6 +262,8 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
         submittedAt: r.submitted_at,
         approvedAt: r.approved_at,
         reviewedAt: r.reviewed_at,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
       };
       
       return registration;
@@ -304,7 +306,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
           examination_board: aq.examinationBoard,
           index_number: aq.indexNumber,
           grade: aq.grade,
-          gpa: aq.gpa ? parseFloat(aq.gpa) : null,
+          gpa: aq.gpa ? parseFloat(String(aq.gpa)) : null,
           major: aq.major,
         })),
         program_id: parseInt(data.programId),
@@ -318,7 +320,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
         documents: data.documents,
       };
 
-      const response = await apiClient.createRegistration(apiData);
+      const response: any = await apiClient.createRegistration(apiData as any);
       
       // Refresh registrations list
       await fetchRegistrations();
@@ -361,7 +363,7 @@ export function LaravelRegistrationProvider({ children }: { children: React.Reac
     try {
       setLoading(true);
       
-      const response = await apiClient.processPayment({
+      const response: any = await apiClient.processPayment({
         registration_id: parseInt(registrationId),
         fee_type: feeType,
         method: method,

@@ -49,7 +49,7 @@ export default function MyCoursesPage() {
   const loadMyCourses = async () => {
     setLoading(true);
     try {
-      const response = await coursesApi.getMyCourses();
+      const response: any = await coursesApi.getMyCourses();
       if (response.error) {
         setError(response.error);
       } else {

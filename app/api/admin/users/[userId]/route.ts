@@ -37,7 +37,7 @@ export async function GET(
     const certificates = db.certificates.findByUser(userId);
 
     // If instructor, get their courses
-    let courses = [];
+    let courses: any[] = [];
     if (user.role === 'instructor') {
       courses = db.courses.findByInstructor(userId);
     }

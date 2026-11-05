@@ -13,7 +13,7 @@ export default function ProfilePage() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const response = await apiClient.getRegistrations();
+        const response: any = await apiClient.getRegistrations();
         if (response && response.length > 0) {
           setRegistration(response[0]);
         }

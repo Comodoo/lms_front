@@ -1,0 +1,194 @@
+'use client';
+
+import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { useAuth } from '@/lib/auth-context';
+import { cn } from '@/lib/utils';
+import {
+    BarChart3,
+    ClipboardList,
+    DollarSign,
+    LayoutDashboard,
+    LogOut,
+    Menu,
+    Package,
+    User,
+    Users,
+} from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+const navigation = [
+  { name: 'Dashboard', href: '/operations/dashboard', icon: LayoutDashboard },
+  { name: 'Inventory', href: '/operations/inventory', icon: Package, module: 'inventory', action: 'view' },
+  { name: 'Inventory Audits', href: '/operations/inventory/audits', icon: Package, module: 'inventory', action: 'audit' },
+  { name: 'HR', href: '/operations/hr', icon: Users, module: 'hr', action: 'view' },
+  { name: 'Salary Scales', href: '/operations/salary-scales', icon: DollarSign, module: 'salary_scales', action: 'view' },
+  { name: 'Salary Projection', href: '/operations/salary-scales/projection', icon: DollarSign, module: 'salary_scales', action: 'view' },
+  { name: 'Budgets', href: '/operations/budgets', icon: ClipboardList, module: 'budgets', action: 'view' },
+  { name: 'Budget Reports', href: '/operations/budgets/reports', icon: ClipboardList, module: 'budgets', action: 'view' },
+  { name: 'Proposals & Plans', href: '/operations/proposals', icon: ClipboardList, module: 'proposals', action: 'view' },
+  { name: 'Reports', href: '/operations/reports', icon: BarChart3, module: 'reports', action: 'operations.view' },
+  { name: 'Audit Logs', href: '/operations/audit-logs', icon: BarChart3, module: 'reports', action: 'operations.view' },
+];
+
+export default function OperationsLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout, can, isAuthenticated, isLoading, canAccessOperationsRoutes } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+    } else if (user && !canAccessOperationsRoutes()) {
+      router.replace('/');
+    }
+  }, [mounted, isLoading, isAuthenticated, user, router, canAccessOperationsRoutes]);
+
+  const visibleNavigation = navigation.filter((item) => !item.module || can(item.module, item.action!));
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const isActivePath = (href: string) => {
+    if (href === '/operations/dashboard') return pathname === href;
+    return pathname === href || pathname.startsWith(href + '/');
+  };
+
+  if (!mounted) {
+    return null;
+  }
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">
+      <div className="p-6 border-b border-white/20">
+        <Link href="/operations/dashboard" className="flex items-center gap-2">
+          <div className="bg-white rounded-lg p-1">
+            <img src="/logo.png" alt="ZMC Logo" className="h-8 w-8 object-contain" />
+          </div>
+          <span className="font-bold text-lg text-white">ZMC Operations</span>
+        </Link>
+      </div>
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {visibleNavigation.map((item) => {
+          const isActive = isActivePath(item.href);
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={() => setSidebarOpen(false)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-white text-[#0D7377] shadow-md shadow-black/10'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+              )}
+            >
+              <item.icon className={cn('h-5 w-5', isActive ? 'text-[#0D7377]' : 'text-white/70')} />
+              {item.name}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="p-4 border-t border-white/20">
+        <div className="flex items-center gap-3 px-3 py-2 bg-white/10 rounded-xl">
+          <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+            <User className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate text-white">{user?.name}</p>
+            <p className="text-xs text-white/70 truncate">{user?.email}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white hover:bg-white/20">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!mounted) return null;
+
+  return (
+    <div className="min-h-screen bg-slate-50/50">
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-64 bg-[#0D7377] border-r border-[#0a5f61]">
+          <SidebarContent />
+        </SheetContent>
+      </Sheet>
+
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
+        <SidebarContent />
+      </div>
+
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-10 bg-white border-b">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Operations & Planning Portal</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{user?.name}</span>
+                      <span className="text-xs text-muted-foreground">{user?.email}</span>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 lg:p-8">{children}</main>
+
+        <footer className="p-6 border-t bg-white text-center">
+          <p className="text-xs text-muted-foreground italic">
+            &copy; 2026 College Student Management System (Operations & Planning Portal)
+          </p>
+        </footer>
+      </div>
+    </div>
+  );
+}

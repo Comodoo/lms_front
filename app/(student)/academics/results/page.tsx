@@ -56,7 +56,7 @@ export default function ResultsPage() {
   useEffect(() => {
     async function fetchResults() {
       try {
-        const response = await apiClient.getStudentResults();
+        const response: any = await apiClient.getStudentResults();
         const { results } = response as any;
         if (!results) return;
 

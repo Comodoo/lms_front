@@ -77,7 +77,7 @@ export default function InstructorSettingsPage() {
   };
 
   const handleSetup2FA = async () => {
-    const res = await enableTwoFactor();
+    const res: any = await enableTwoFactor();
     if (res.success) {
       setQrCodeData(res);
       setShowTwoFactorDialog(true);
@@ -85,7 +85,7 @@ export default function InstructorSettingsPage() {
   };
 
   const handleDisable2FA = async () => {
-    const res = await disableTwoFactor('123456'); // Mocking proper code entry for demo
+    const res: any = await disableTwoFactor('123456'); // Mocking proper code entry for demo
     if (res.success) {
       toast({ title: "2FA Disabled", description: res.message });
     }
@@ -93,7 +93,7 @@ export default function InstructorSettingsPage() {
 
   const handleDeleteAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await deleteAccount(deletePassword);
+    const res: any = await deleteAccount(deletePassword);
     if (!res.success) {
       toast({ title: "Error", description: res.message, variant: "destructive" });
     }

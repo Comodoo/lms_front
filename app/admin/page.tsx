@@ -38,7 +38,7 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const data = await apiClient.getDashboardStats();
+      const data: any = await apiClient.getDashboardStats();
       if (data) {
         setStats(data as any);
       }

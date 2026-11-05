@@ -225,11 +225,8 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
     
     try {
       await apiClient.createExamResult({
-        registration_number: data.registrationNumber,
-        student_id: data.userId ? parseInt(data.userId) : null,
+        student_id: data.userId ? parseInt(data.userId) : 0,
         course_offering_id: parseInt(data.courseOfferingId),
-        academic_year: data.academicYear,
-        semester: data.semester,
         cat1_score: data.cat1Score,
         cat2_score: data.cat2Score,
         assignment_score: data.assignmentScore,
@@ -377,6 +374,7 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
       newCGPA: data.previousCGPA ? ((data.previousCGPA + semesterGPA) / 2) : semesterGPA,
       
       status: 'unpublished',
+      courseResults: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -427,14 +425,12 @@ export function ResultsProvider({ children }: { children: React.ReactNode }) {
       id: `course-${Date.now()}`,
       code: data.code,
       name: data.name,
-      departmentId: data.departmentId,
-      department: data.department,
+      department: data.department || data.departmentId,
       credits: data.credits,
       description: data.description,
       prerequisiteCourseIds: data.prerequisiteCourseIds || [],
       isActive: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
     
     setCourseOfferings(prev => [...prev, newCourse]);

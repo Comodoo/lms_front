@@ -637,7 +637,7 @@ export default function AdminStudentResultDetailPage() {
                               {semesterCourses.length === 0 ? (
                                 <p className="text-sm text-muted-foreground">No course results recorded for this semester.</p>
                               ) : (
-                                <Table size="sm" className="bg-background border rounded-md overflow-hidden">
+                                <Table className="bg-background border rounded-md overflow-hidden">
                                   <TableHeader>
                                     <TableRow className="bg-muted/50">
                                       <TableHead className="h-8">Course Code</TableHead>

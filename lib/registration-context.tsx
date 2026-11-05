@@ -66,7 +66,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
 
   const loadPrograms = async () => {
     try {
-      const data = await apiClient.getPrograms();
+      const data: any = await apiClient.getPrograms();
       setPrograms(data as Program[]);
     } catch (error: any) {
       if (error?.message?.includes('Unauthenticated')) return;
@@ -80,7 +80,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
 
   const loadDepartments = async () => {
     try {
-      const data = await apiClient.getDepartments();
+      const data: any = await apiClient.getDepartments();
       setDepartments(data as Department[]);
     } catch (error: any) {
       if (error?.message?.includes('Unauthenticated')) return;
@@ -95,7 +95,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
   const loadRegistrations = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.getRegistrations();
+      const data: any = await apiClient.getRegistrations();
       setRegistrations(data);
     } catch (error: any) {
       if (error?.message?.includes('Unauthenticated')) {
@@ -165,7 +165,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
         formData.append('documents[]', data.nationalIdDocument);
       }
 
-      const response = await registrationsApi.create(formData);
+      const response: any = await registrationsApi.create(formData);
       
       if (response.error) {
         throw new Error(response.error);
@@ -182,7 +182,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
   const getRegistrations = async (filters?: { status?: RegistrationStatus }): Promise<StudentRegistration[]> => {
     setLoading(true);
     try {
-      const data = await apiClient.getRegistrations(filters?.status);
+      const data: any = await apiClient.getRegistrations(filters?.status);
       return data;
     } finally {
       setLoading(false);

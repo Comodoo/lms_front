@@ -149,7 +149,7 @@ export default function AdminRolesPage() {
     setMatrixSaving(true);
     setError(null);
     try {
-      const res = await rolesApi.update(selectedMatrixRole.id, {
+      const res: any = await rolesApi.update(selectedMatrixRole.id, {
         name: selectedMatrixRole.name,
         description: selectedMatrixRole.description || '',
         permissions: matrixCodes,
@@ -205,7 +205,7 @@ export default function AdminRolesPage() {
   const deleteRole = async (role: RoleRecord) => {
     if (!confirm(`Delete role "${role.name}"? Users assigned it will lose its permissions.`)) return;
     try {
-      const res = await rolesApi.delete(role.id);
+      const res: any = await rolesApi.delete(role.id);
       if (res.error) throw new Error(res.error);
       await loadAll();
     } catch (err: any) {
@@ -222,7 +222,7 @@ export default function AdminRolesPage() {
   const saveAssign = async () => {
     if (!assignUser) return;
     try {
-      const res = await rolesApi.assignRoles(assignUser.id, assignRoleIds);
+      const res: any = await rolesApi.assignRoles(assignUser.id, assignRoleIds);
       if (res.error) throw new Error(res.error);
       setAssignUser(null);
       await loadAll();

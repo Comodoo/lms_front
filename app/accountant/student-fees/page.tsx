@@ -99,7 +99,7 @@ export default function StudentFeesPage() {
         didOpen: () => Swal.showLoading()
       });
       
-      const res = await paymentsApi.verifyCashPayment(payment.id, { notes: 'Approved by accountant' });
+      const res: any = await paymentsApi.verifyCashPayment(payment.id, { notes: 'Approved by accountant' });
       
       if (res.error) {
         Swal.fire('Error', res.error, 'error');

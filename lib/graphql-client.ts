@@ -187,7 +187,7 @@ class GraphQLClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response: any = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers,
       body: JSON.stringify({ query, variables }),

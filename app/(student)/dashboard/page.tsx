@@ -417,7 +417,7 @@ export default function StudentDashboard() {
                 <div>
                   <p className="text-lg font-bold">{studentData.yearOfStudy}</p>
                   <Badge variant="secondary" className="mt-1 text-xs bg-green-100 text-green-700 hover:bg-green-100 uppercase">
-                    {currentRegistration?.status === 'graduated' ? 'Graduated' : 'Active Student'}
+                    {(currentRegistration as any)?.status === 'graduated' ? 'Graduated' : 'Active Student'}
                   </Badge>
                 </div>
 

@@ -38,7 +38,7 @@ async function fetchAll<T>(endpoint: string, perPage = 200): Promise<T[]> {
 
   for (;;) {
     const sep = endpoint.includes('?') ? '&' : '?';
-    const res = await apiFetch<Paginated<T> | T[]>(
+    const res: any = await apiFetch<Paginated<T> | T[]>(
       `${endpoint}${sep}page=${page}&per_page=${perPage}`
     );
     const body = res.data;
@@ -83,12 +83,12 @@ async function apiFetch<T>(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response: any = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (!response.ok) {
       if (response.status === 401 && endpoint !== '/auth/login') {
@@ -213,7 +213,7 @@ export const paymentsApi = {
       if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
       return apiFetch(`/payments?${params}`);
     }
-    const data = await fetchAll<any>('/payments');
+    const data: any = await fetchAll<any>('/payments');
     return { data };
   },
 
@@ -312,7 +312,7 @@ export const staffApi = {
       return apiFetch<Paginated<any>>(`/staff${query}`);
     }
 
-    const data = await fetchAll<any>(`/staff${query}`);
+    const data: any = await fetchAll<any>(`/staff${query}`);
     return { data };
   },
 
@@ -377,7 +377,7 @@ export const registrationsApi = {
       if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
       return apiFetch(`/registrations?${params}`);
     }
-    const data = await fetchAll<any>('/registrations');
+    const data: any = await fetchAll<any>('/registrations');
     return { data };
   },
 
@@ -418,7 +418,7 @@ export const examResultsApi = {
       if (options.per_page !== undefined) params.set('per_page', String(options.per_page));
       return apiFetch(`/exam-results?${params}`);
     }
-    const data = await fetchAll<any>('/exam-results');
+    const data: any = await fetchAll<any>('/exam-results');
     return { data };
   },
 
@@ -535,4 +535,290 @@ export const dashboardApi = {
   async getAccountantStats() {
     return apiFetch('/dashboard/accountant-stats');
   }
+};
+
+// Inventory API
+function buildQuery(params?: Record<string, any>) {
+  if (!params) return '';
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+  });
+  const qs = sp.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export const inventoryApi = {
+  async getCategories(params?: Record<string, any>) {
+    return apiFetch(`/inventory-categories${buildQuery(params)}`);
+  },
+  async createCategory(data: any) {
+    return apiFetch('/inventory-categories', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async getLocations(params?: Record<string, any>) {
+    return apiFetch(`/inventory-locations${buildQuery(params)}`);
+  },
+  async createLocation(data: any) {
+    return apiFetch('/inventory-locations', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async getItems(params?: Record<string, any>) {
+    return apiFetch(`/inventory-items${buildQuery(params)}`);
+  },
+  async getItem(id: string | number) {
+    return apiFetch(`/inventory-items/${id}`);
+  },
+  async createItem(data: any) {
+    return apiFetch('/inventory-items', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateItem(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async deleteItem(id: string | number) {
+    return apiFetch(`/inventory-items/${id}`, { method: 'DELETE' });
+  },
+  async receive(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/receive`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async assign(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/assign`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async transfer(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/transfer`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async returnItem(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/return`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async repair(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/repair`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async markLost(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/mark-lost`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async dispose(id: string | number, data: any) {
+    return apiFetch(`/inventory-items/${id}/dispose`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async getHistory(id: string | number, params?: Record<string, any>) {
+    return apiFetch(`/inventory-items/${id}/history${buildQuery(params)}`);
+  },
+  async getTransactions(params?: Record<string, any>) {
+    return apiFetch(`/inventory-transactions${buildQuery(params)}`);
+  },
+  async getAudits(params?: Record<string, any>) {
+    return apiFetch(`/inventory-audits${buildQuery(params)}`);
+  },
+  async createAudit(data: any) {
+    return apiFetch('/inventory-audits', { method: 'POST', body: JSON.stringify(data) });
+  },
+};
+
+// HR API
+export const hrApi = {
+  async getProfiles(params?: Record<string, any>) {
+    return apiFetch(`/hr-profiles${buildQuery(params)}`);
+  },
+  async getProfile(id: string | number) {
+    return apiFetch(`/hr-profiles/${id}`);
+  },
+  async createProfile(data: any) {
+    return apiFetch('/hr-profiles', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateProfile(id: string | number, data: any) {
+    return apiFetch(`/hr-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async updateStatus(id: string | number, data: any) {
+    return apiFetch(`/hr-profiles/${id}/status`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getDocuments(id: string | number) {
+    return apiFetch(`/hr-profiles/${id}/documents`);
+  },
+  async uploadDocument(id: string | number, formData: FormData) {
+    return apiFetch(`/hr-profiles/${id}/documents`, { method: 'POST', body: formData, headers: {} });
+  },
+  async downloadDocument(profileId: string | number, documentId: string | number) {
+    return apiFetch(`/hr-profiles/${profileId}/documents/${documentId}/download`);
+  },
+  async getLeave(id: string | number) {
+    return apiFetch(`/hr-profiles/${id}/leave`);
+  },
+  async createLeave(id: string | number, data: any) {
+    return apiFetch(`/hr-profiles/${id}/leave`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async approveLeave(id: string | number) {
+    return apiFetch(`/hr-leave-records/${id}/approve`, { method: 'PUT' });
+  },
+  async rejectLeave(id: string | number) {
+    return apiFetch(`/hr-leave-records/${id}/reject`, { method: 'PUT' });
+  },
+  async getStats() {
+    return apiFetch('/hr-profiles/stats');
+  },
+};
+
+// Audit Logs API
+export const auditLogsApi = {
+  async getAll(params?: Record<string, any>) {
+    return apiFetch(`/audit-logs${buildQuery(params)}`);
+  },
+};
+
+// Salary API
+export const salaryApi = {
+  async getGrades(params?: Record<string, any>) {
+    return apiFetch(`/salary-grades${buildQuery(params)}`);
+  },
+  async createGrade(data: any) {
+    return apiFetch('/salary-grades', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateGrade(id: string | number, data: any) {
+    return apiFetch(`/salary-grades/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getSteps(gradeId: string | number) {
+    return apiFetch(`/salary-grades/${gradeId}/steps`);
+  },
+  async createStep(gradeId: string | number, data: any) {
+    return apiFetch(`/salary-grades/${gradeId}/steps`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateStep(id: string | number, data: any) {
+    return apiFetch(`/salary-steps/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getAllowances(params?: Record<string, any>) {
+    return apiFetch(`/salary-allowances${buildQuery(params)}`);
+  },
+  async createAllowance(data: any) {
+    return apiFetch('/salary-allowances', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateAllowance(id: string | number, data: any) {
+    return apiFetch(`/salary-allowances/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getPlacements(params?: Record<string, any>) {
+    return apiFetch(`/staff-salary-placements${buildQuery(params)}`);
+  },
+  async createPlacement(data: any) {
+    return apiFetch('/staff-salary-placements', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updatePlacement(id: string | number, data: any) {
+    return apiFetch(`/staff-salary-placements/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getProjection(params?: Record<string, any>) {
+    return apiFetch(`/salary-cost-projection${buildQuery(params)}`);
+  },
+};
+
+// Budget API
+export const budgetApi = {
+  async getFiscalYears(params?: Record<string, any>) {
+    return apiFetch(`/fiscal-years${buildQuery(params)}`);
+  },
+  async createFiscalYear(data: any) {
+    return apiFetch('/fiscal-years', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async getCategories(params?: Record<string, any>) {
+    return apiFetch(`/budget-categories${buildQuery(params)}`);
+  },
+  async createCategory(data: any) {
+    return apiFetch('/budget-categories', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async getBudgets(params?: Record<string, any>) {
+    return apiFetch(`/budgets${buildQuery(params)}`);
+  },
+  async getBudget(id: string | number) {
+    return apiFetch(`/budgets/${id}`);
+  },
+  async createBudget(data: any) {
+    return apiFetch('/budgets', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateBudget(id: string | number, data: any) {
+    return apiFetch(`/budgets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async addLine(id: string | number, data: any) {
+    return apiFetch(`/budgets/${id}/lines`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateLine(id: string | number, data: any) {
+    return apiFetch(`/budget-lines/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async submit(id: string | number) {
+    return apiFetch(`/budgets/${id}/submit`, { method: 'POST' });
+  },
+  async review(id: string | number) {
+    return apiFetch(`/budgets/${id}/review`, { method: 'POST' });
+  },
+  async approve(id: string | number) {
+    return apiFetch(`/budgets/${id}/approve`, { method: 'POST' });
+  },
+  async reject(id: string | number, reason: string) {
+    return apiFetch(`/budgets/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+  },
+  async close(id: string | number) {
+    return apiFetch(`/budgets/${id}/close`, { method: 'POST' });
+  },
+  async getExpenditures(lineId: string | number, params?: Record<string, any>) {
+    return apiFetch(`/budget-lines/${lineId}/expenditures${buildQuery(params)}`);
+  },
+  async createExpenditure(lineId: string | number, data: any) {
+    return apiFetch(`/budget-lines/${lineId}/expenditures`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async verifyExpenditure(id: string | number) {
+    return apiFetch(`/budget-expenditures/${id}/verify`, { method: 'PUT' });
+  },
+  async getVariance(params?: Record<string, any>) {
+    return apiFetch(`/budget-reports/variance${buildQuery(params)}`);
+  },
+  async getDepartmentSummary(params?: Record<string, any>) {
+    return apiFetch(`/budget-reports/department-summary${buildQuery(params)}`);
+  },
+};
+
+// Proposals API
+export const proposalApi = {
+  async getProposals(params?: Record<string, any>) {
+    return apiFetch(`/proposals${buildQuery(params)}`);
+  },
+  async getProposal(id: string | number) {
+    return apiFetch(`/proposals/${id}`);
+  },
+  async createProposal(data: any) {
+    return apiFetch('/proposals', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateProposal(id: string | number, data: any) {
+    return apiFetch(`/proposals/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async deleteProposal(id: string | number) {
+    return apiFetch(`/proposals/${id}`, { method: 'DELETE' });
+  },
+  async addActivity(id: string | number, data: any) {
+    return apiFetch(`/proposals/${id}/activities`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateActivity(id: string | number, data: any) {
+    return apiFetch(`/proposal-activities/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async addKpi(id: string | number, data: any) {
+    return apiFetch(`/proposals/${id}/kpis`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateKpi(id: string | number, data: any) {
+    return apiFetch(`/proposal-kpis/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async getAttachments(id: string | number) {
+    return apiFetch(`/proposals/${id}/attachments`);
+  },
+  async uploadAttachment(id: string | number, formData: FormData) {
+    return apiFetch(`/proposals/${id}/attachments`, { method: 'POST', body: formData, headers: {} });
+  },
+  async submit(id: string | number) {
+    return apiFetch(`/proposals/${id}/submit`, { method: 'POST' });
+  },
+  async review(id: string | number) {
+    return apiFetch(`/proposals/${id}/review`, { method: 'POST' });
+  },
+  async approve(id: string | number) {
+    return apiFetch(`/proposals/${id}/approve`, { method: 'POST' });
+  },
+  async reject(id: string | number, reason: string) {
+    return apiFetch(`/proposals/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+  },
+  async publish(id: string | number) {
+    return apiFetch(`/proposals/${id}/publish`, { method: 'POST' });
+  },
+  async close(id: string | number) {
+    return apiFetch(`/proposals/${id}/close`, { method: 'POST' });
+  },
 };

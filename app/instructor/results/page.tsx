@@ -272,7 +272,7 @@ export default function InstructorResultsPage() {
             studentProfileId: student.id,
             userId: student.userId,
             registrationNumber: student.registrationNumber,
-            studentName: student.studentName || `${student.firstName} ${student.lastName}`,
+            studentName: student.studentName || `${(student as any).firstName} ${(student as any).lastName}`,
             academicYear: '2025/2026',
             semester: 'first' as 'first' | 'second' | 'summer',
             courseOfferingId: course?.id || courseFilter !== 'all' ? courseFilter : '',
@@ -321,7 +321,7 @@ export default function InstructorResultsPage() {
       const existing = examResults.find(r => r.registrationNumber === s.registrationNumber && r.courseOfferingId === targetCourseId);
       return {
         'Registration Number': s.registrationNumber,
-        'Student Name': s.studentName || `${s.firstName} ${s.lastName}`,
+        'Student Name': s.studentName || `${(s as any).firstName} ${(s as any).lastName}`,
         'CAT 1': existing?.cat1Score || 0,
         'CAT 2': existing?.cat2Score || 0,
         'Assignment': existing?.assignmentScore || 0,

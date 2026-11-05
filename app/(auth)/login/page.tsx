@@ -59,6 +59,10 @@ export default function LoginPage() {
     if (userRole === 'accountant') {
       return '/accountant/dashboard';
     }
+    // Operations & Planning officers go to operations dashboard
+    if (userRole === 'operations') {
+      return '/operations/dashboard';
+    }
     // Default: students go to student dashboard
     return '/dashboard';
   };
@@ -78,7 +82,7 @@ export default function LoginPage() {
     
     if (result.success) {
       // Redirect based on user role returned from login
-      const redirectPath = getRedirectPath(result.userRole || 'student');
+      const redirectPath = getRedirectPath((result as any).userRole || 'student');
       router.push(redirectPath);
     } else {
       setMessage(result.message);

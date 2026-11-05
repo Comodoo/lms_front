@@ -74,6 +74,8 @@ interface Course {
   description: string;
   credit_id?: string;
   instructor_id?: string;
+  instructor_name?: string;
+  instructor_assignments?: any[];
   credit_name?: string;
   credit_value?: number;
   department_id?: string;
@@ -188,7 +190,7 @@ export default function AdminCoursesPage() {
   const loadCourses = async () => {
     setLoading(true);
     setError(null);
-    const response = await coursesApi.getAll();
+    const response: any = await coursesApi.getAll();
     if (response.error) {
       setError(response.error);
     } else if (response.data && Array.isArray(response.data)) {
@@ -208,14 +210,14 @@ export default function AdminCoursesPage() {
   };
 
   const loadDepartments = async () => {
-    const response = await departmentsApi.getAll();
+    const response: any = await departmentsApi.getAll();
     if (response.data && Array.isArray(response.data)) {
       setDepartments(response.data);
     }
   };
 
   const loadPrograms = async () => {
-    const response = await programsApi.getAll();
+    const response: any = await programsApi.getAll();
     if (response.data && Array.isArray(response.data)) {
       setPrograms(response.data);
     }
@@ -232,7 +234,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await departmentsApi.create(deptForm);
+      const response: any = await departmentsApi.create(deptForm);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -257,7 +259,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await departmentsApi.update(selectedDepartment.id, deptForm);
+      const response: any = await departmentsApi.update(selectedDepartment.id, deptForm);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -281,7 +283,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await departmentsApi.delete(deptId);
+      const response: any = await departmentsApi.delete(deptId);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -292,14 +294,14 @@ export default function AdminCoursesPage() {
   };
 
   const loadCredits = async () => {
-    const response = await creditsApi.getAll();
+    const response: any = await creditsApi.getAll();
     if (response.data && Array.isArray(response.data)) {
       setCredits(response.data);
     }
   };
 
   const loadInstructors = async () => {
-    const response = await coursesApi.getInstructors();
+    const response: any = await coursesApi.getInstructors();
     if (response.data && Array.isArray(response.data)) {
       setInstructors(response.data);
     }
@@ -316,7 +318,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await creditsApi.create(creditForm);
+      const response: any = await creditsApi.create(creditForm);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -341,7 +343,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await creditsApi.update(selectedCredit.id, creditForm);
+      const response: any = await creditsApi.update(selectedCredit.id, creditForm);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -365,7 +367,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await creditsApi.delete(creditId);
+      const response: any = await creditsApi.delete(creditId);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -387,7 +389,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await coursesApi.delete(courseId);
+      const response: any = await coursesApi.delete(courseId);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -411,7 +413,7 @@ export default function AdminCoursesPage() {
     if (result.isConfirmed) {
       // Exclude instructor_id from creation payload
       const { instructor_id, ...payload } = courseForm;
-      const response = await coursesApi.create(payload);
+      const response: any = await coursesApi.create(payload);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -444,7 +446,7 @@ export default function AdminCoursesPage() {
 
     if (result.isConfirmed) {
       try {
-        const response = await coursesApi.assignInstructor(selectedCourse.id, {
+        const response: any = await coursesApi.assignInstructor(selectedCourse.id, {
           instructor_id: instructorId,
           academic_year: '2026/2027',
           semester: 'semester_one',
@@ -495,7 +497,7 @@ export default function AdminCoursesPage() {
 
     if (result.isConfirmed) {
       try {
-        const response = await coursesApi.updateAssignmentStatus(assignmentId, { status: newStatus });
+        const response: any = await coursesApi.updateAssignmentStatus(assignmentId, { status: newStatus });
         if (response.error) {
           Swal.fire('Error!', response.error, 'error');
         } else {
@@ -533,7 +535,7 @@ export default function AdminCoursesPage() {
 
     if (result.isConfirmed) {
       try {
-        const response = await coursesApi.removeInstructor(selectedCourse.id, assignmentId);
+        const response: any = await coursesApi.removeInstructor(selectedCourse.id, assignmentId);
         if (response.error) {
           Swal.fire('Error!', response.error, 'error');
         } else {
@@ -568,7 +570,7 @@ export default function AdminCoursesPage() {
     });
 
     if (result.isConfirmed) {
-      const response = await coursesApi.update(selectedCourse.id, courseForm);
+      const response: any = await coursesApi.update(selectedCourse.id, courseForm);
       if (response.error) {
         Swal.fire('Error!', response.error, 'error');
       } else {
@@ -582,7 +584,7 @@ export default function AdminCoursesPage() {
   };
 
   const handleCreate = async (data: any) => {
-    const response = await coursesApi.create(data);
+    const response: any = await coursesApi.create(data);
     if (response.error) {
       setError(response.error);
     } else {
@@ -592,7 +594,7 @@ export default function AdminCoursesPage() {
   };
 
   const handleUpdate = async (id: string, data: any) => {
-    const response = await coursesApi.update(id, data);
+    const response: any = await coursesApi.update(id, data);
     if (response.error) {
       setError(response.error);
     } else {

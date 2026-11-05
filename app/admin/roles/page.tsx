@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import {
   Table,
   TableBody,
@@ -67,6 +68,8 @@ export default function AdminRolesPage() {
   const [matrixDirty, setMatrixDirty] = useState(false);
   const [matrixSaving, setMatrixSaving] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  const [matrixPage, setMatrixPage] = useState(1);
+  const MATRIX_PER_PAGE = 8;
 
   // Role create/edit state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
@@ -126,6 +129,12 @@ export default function AdminRolesPage() {
     return Array.from(groups.entries());
   }, [permissions]);
 
+  const matrixTotalPages = Math.max(1, Math.ceil(permissionGroups.length / MATRIX_PER_PAGE));
+  const pagedPermissionGroups = permissionGroups.slice(
+    (matrixPage - 1) * MATRIX_PER_PAGE,
+    matrixPage * MATRIX_PER_PAGE
+  );
+
   const selectedMatrixRole = useMemo(
     () => roles.find((r) => r.id === matrixRoleId) || null,
     [roles, matrixRoleId]
@@ -137,6 +146,10 @@ export default function AdminRolesPage() {
     );
     setMatrixDirty(true);
   };
+
+  useEffect(() => {
+    setMatrixPage(1);
+  }, [matrixRoleId, permissions]);
 
   const toggleExpandModule = (module: string) => {
     setExpandedModules((prev) => {
@@ -349,7 +362,7 @@ export default function AdminRolesPage() {
                       <span>All Actions</span>
                     </div>
                   </div>
-                  {permissionGroups.map(([module, actions]) => {
+                  {pagedPermissionGroups.map(([module, actions]) => {
                     const granted = actions.filter((a: any) => matrixCodes.includes(module + '.' + a.action)).length;
                     const total = actions.length;
                     const pct = total ? (granted / total) * 100 : 0;
@@ -395,6 +408,20 @@ export default function AdminRolesPage() {
                             })}
                           </div>
                         )}
+                      <div className="py-3 flex items-center justify-between px-4 border-t">
+                        <div className="text-sm text-muted-foreground">
+                          Showing {permissionGroups.length ? (matrixPage - 1) * MATRIX_PER_PAGE + 1 : 0} to {Math.min(matrixPage * MATRIX_PER_PAGE, permissionGroups.length)} of {permissionGroups.length} modules
+                        </div>
+                        <Pagination className="justify-end mx-0 w-auto">
+                          <PaginationContent>
+                            <PaginationItem><PaginationPrevious onClick={() => setMatrixPage((p) => Math.max(1, p - 1))} className={matrixPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} /></PaginationItem>
+                            {Array.from({ length: matrixTotalPages }).map((_, i) => (
+                              <PaginationItem key={i}><PaginationLink onClick={() => setMatrixPage(i + 1)} isActive={matrixPage === i + 1} className="cursor-pointer">{i + 1}</PaginationLink></PaginationItem>
+                            ))}
+                            <PaginationItem><PaginationNext onClick={() => setMatrixPage((p) => Math.min(matrixTotalPages, p + 1))} className={matrixPage >= matrixTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} /></PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
                       </div>
                     );
                   })}

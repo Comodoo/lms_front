@@ -186,6 +186,14 @@ export default function AdminResultsPage() {
     rawProfiles.find(s => String(s.id) === String(r.studentProfileId));
 
   const handlePublish = async (result: any) => {
+    // Guarded, not just hidden: the button is behind `can('results','publish')`
+    // but this handler is reachable regardless.
+    if (!can('results', 'publish')) {
+      toast.error("You don't have permission to perform this action.", {
+        description: 'Missing permission: results.publish',
+      });
+      return;
+    }
     setActionLoading(result.id);
     try {
       await approveExamResult(result.id);
@@ -199,6 +207,10 @@ export default function AdminResultsPage() {
 
   const handleRejectConfirm = async () => {
     if (!rejectTarget) return;
+    if (!can('results', 'reject')) {
+      setRejectError("You don't have permission to reject results.");
+      return;
+    }
     setRejectError(null);
     setActionLoading(rejectTarget.id);
     try {

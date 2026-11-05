@@ -11,7 +11,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { AuthLoadingScreen, Forbidden } from '@/components/auth/permission-guard';
 import { useAuth } from '@/lib/auth-context';
+import { permissionForAdminRoute } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 import {
     BookOpen,
@@ -34,6 +36,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+/**
+ * Admin navigation. Every entry declares the canonical permission code from
+ * lib/permissions.ts that reveals it. There are no free-floating strings here.
+ */
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, module: 'dashboard', action: 'view' },
   { name: 'Students', href: '/admin/users/students', icon: Users, module: 'students', action: 'view' },
@@ -42,16 +48,17 @@ const navigation = [
   { name: 'Courses', href: '/admin/courses', icon: BookOpen, module: 'courses', action: 'view' },
   { name: 'Registrations', href: '/admin/registrations', icon: ClipboardList, module: 'registrations', action: 'view' },
   { name: 'Results', href: '/admin/results', icon: FileText, module: 'results', action: 'view' },
-  { name: 'Payments', href: '/admin/payments', icon: DollarSign, module: 'payments', action: 'view' },
+  // Fee structure and payment transactions are one area, so one code: fees.view.
+  { name: 'Payments', href: '/admin/payments', icon: DollarSign, module: 'fees', action: 'view' },
   { name: 'Reports', href: '/admin/reports', icon: BarChart3, module: 'reports', action: 'view' },
   { name: 'Settings', href: '/admin/settings', icon: Settings, module: 'settings', action: 'view' },
   { name: 'Roles & Permissions', href: '/admin/roles', icon: ShieldCheck, module: 'roles', action: 'view' },
-];
+] as const;
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, can, isAuthenticated, isLoading } = useAuth();
+  const { user, logout, can, isAuthenticated, isLoading, canAccessAdminPanel } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -59,14 +66,58 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setMounted(true);
   }, []);
 
+  /**
+   * Guard order matters, and the loading state comes first. Previously this ran
+   * against a cached user while `/auth/profile` was still loading, which caused
+   * spurious redirects and hid the reason a page was empty.
+   *
+   *   isLoading  -> wait, render nothing (no redirect decision)
+   *   !authed    -> /login
+   *   no admin   -> the portal this user actually belongs to
+   */
   useEffect(() => {
     if (!mounted || isLoading) return;
+
     if (!isAuthenticated) {
       router.replace('/login');
-    } else if (user && user.role !== 'admin' && user.canAccessAdminPanel === false) {
-      router.replace('/');
+      return;
     }
-  }, [mounted, isLoading, isAuthenticated, user, router]);
+
+    if (!canAccessAdminPanel()) {
+      router.replace(user?.role === 'instructor' ? '/instructor' : user?.role === 'accountant' ? '/accountant/dashboard' : '/dashboard');
+      return;
+    }
+
+    /**
+     * `admin.access` on its own means "may enter, sees nothing". Rather than
+     * stranding that user on a Forbidden dashboard, send them to the first
+     * page their permissions actually allow.
+     */
+    const required = permissionForAdminRoute(pathname);
+    if (required && !can(required.module, required.action)) {
+      const fallback = navigation.find((item) => can(item.module, item.action));
+      if (fallback) {
+        router.replace(fallback.href);
+        return;
+      }
+      // No page is reachable at all: the user genuinely has no admin grants.
+      router.replace('/dashboard');
+    }
+  }, [mounted, isLoading, isAuthenticated, canAccessAdminPanel, can, pathname, user, router]);
+
+  // Guard the first paint too, not just the effect above.
+  if (!mounted || isLoading) return <AuthLoadingScreen />;
+  if (!isAuthenticated || !canAccessAdminPanel()) return null;
+
+  /**
+   * Page-level authorization, keyed off the URL. Hiding a sidebar link is not
+   * access control — this is what makes typing the URL safe, including for
+   * detail routes like /admin/registrations/[id].
+   */
+  const routePermission = permissionForAdminRoute(pathname);
+  if (routePermission && !can(routePermission.module, routePermission.action)) {
+    return <Forbidden module={routePermission.module} action={routePermission.action} backHref="/admin" />;
+  }
 
   const visibleNavigation = navigation.filter((item) => can(item.module, item.action));
 
@@ -78,8 +129,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (href === '/admin') return pathname === '/admin';
     return pathname === href || pathname.startsWith(href + '/');
   };
-
-  if (!mounted) return null;
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-[#0D7377] border-r border-[#0a5f61]">

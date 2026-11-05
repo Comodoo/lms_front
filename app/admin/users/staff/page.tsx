@@ -43,8 +43,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Search, Filter, MoreVertical, Edit, Trash2, UserPlus, Shield, Mail, Check, X, UserCog } from 'lucide-react';
-import { staffApi, rolesApi, RoleRecord, Paginated } from '@/lib/api';
+import { staffApi, rolesApi, RoleRecord, Paginated, describeApiError } from '@/lib/api';
+import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
+import { usePermissionGuard } from '@/lib/use-permission';
 
 interface Staff {
   id: string;
@@ -68,6 +70,10 @@ const PASSWORD_RULES = {
 export default function AdminStaffPage() {
   const router = useRouter();
   const { can } = useAuth();
+  const guardCreate = usePermissionGuard('staff', 'create');
+  const guardUpdate = usePermissionGuard('staff', 'update');
+  const guardDelete = usePermissionGuard('staff', 'delete');
+  const guardAssign = usePermissionGuard('roles', 'assign');
   const [mounted, setMounted] = useState(false);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,6 +123,8 @@ export default function AdminStaffPage() {
   }, []);
 
   const fetchRoles = async () => {
+    // The role picker is only meaningful with roles.view; without it the
+    // "Manage Roles" entry point is hidden anyway.
     if (!can('roles', 'view')) return;
     try {
       const res: any = await rolesApi.getAll();
@@ -187,6 +195,7 @@ export default function AdminStaffPage() {
   };
 
   const handleCreateSubmit = async () => {
+    if (!guardCreate()) return;
     setFormError(null);
     if (!form.use_default_password) {
       if (form.password !== form.password_confirmation) {
@@ -203,7 +212,7 @@ export default function AdminStaffPage() {
     try {
       const res: any = await staffApi.create(form);
       if (res.error) {
-        setFormError(res.error);
+        setFormError(describeApiError(res));
         return;
       }
       await fetchStaff();
@@ -215,6 +224,7 @@ export default function AdminStaffPage() {
 
   const handleEditSubmit = async () => {
     if (!selectedStaff) return;
+    if (!guardUpdate()) return;
     setFormError(null);
     
     const payload: any = {
@@ -242,7 +252,7 @@ export default function AdminStaffPage() {
     try {
       const res: any = await staffApi.update(selectedStaff.id, payload);
       if (res.error) {
-        setFormError(res.error);
+        setFormError(describeApiError(res));
         return;
       }
       await fetchStaff();
@@ -253,8 +263,13 @@ export default function AdminStaffPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!guardDelete()) return;
     if (confirm('Are you sure you want to deactivate this staff member?')) {
-      await staffApi.delete(id);
+      const res = await staffApi.delete(id);
+      if (res.error) {
+        toast.error(describeApiError(res));
+        return;
+      }
       fetchStaff();
     }
   };
@@ -704,16 +719,29 @@ export default function AdminStaffPage() {
               disabled={assignSaving}
               onClick={async () => {
                 if (!assignTarget) return;
+                // Guarded here as well as on the menu item: a hidden menu entry
+                // is not a guard.
+                if (!guardAssign()) {
+                  setAssignError("You don't have permission to assign roles.");
+                  return;
+                }
                 setAssignSaving(true);
                 setAssignError(null);
                 try {
                   const res: any = await rolesApi.assignRoles(assignTarget.id, assignRoleIds);
                   if (res.error) {
-                    setAssignError(res.error);
+                    setAssignError(describeApiError(res));
                     return;
                   }
                   await fetchStaff();
                   setAssignRoleOpen(false);
+                  // The backend now holds new permissions for this user. Tell
+                  // them, because they will not see the change until their tab
+                  // regains focus or they reload.
+                  toast.success('Roles updated', {
+                    description:
+                      'The new permissions apply the next time that user loads the app or returns to their tab.',
+                  });
                 } catch (err: any) {
                   setAssignError(err.message || 'Failed to update roles');
                 } finally {

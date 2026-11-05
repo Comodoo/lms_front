@@ -205,7 +205,7 @@ export default function InventoryDetailPage() {
 
       {/* Receive Dialog */}
       <Dialog open={receiveOpen} onOpenChange={setReceiveOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Receive Stock</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Quantity</Label><Input type="number" value={receiveForm.quantity} onChange={(e) => setReceiveForm({ ...receiveForm, quantity: Number(e.target.value) })} /></div>
@@ -232,7 +232,7 @@ export default function InventoryDetailPage() {
 
       {/* Assign Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Assign Item</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>To User ID</Label><Input value={assignForm.to_user_id} onChange={(e) => setAssignForm({ ...assignForm, to_user_id: e.target.value })} /></div>
@@ -248,7 +248,7 @@ export default function InventoryDetailPage() {
 
       {/* Transfer Dialog */}
       <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Transfer Item</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>To Location</Label>
@@ -269,7 +269,7 @@ export default function InventoryDetailPage() {
 
       {/* Return Dialog */}
       <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Return Item</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Quantity</Label><Input type="number" value={returnForm.quantity} onChange={(e) => setReturnForm({ ...returnForm, quantity: Number(e.target.value) })} /></div>
@@ -296,7 +296,7 @@ export default function InventoryDetailPage() {
 
       {/* Dispose Dialog */}
       <Dialog open={disposeOpen} onOpenChange={setDisposeOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Dispose Item</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Quantity</Label><Input type="number" value={disposeForm.quantity} onChange={(e) => setDisposeForm({ ...disposeForm, quantity: Number(e.target.value) })} /></div>
@@ -311,7 +311,7 @@ export default function InventoryDetailPage() {
 
       {/* Audit Dialog */}
       <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create Audit Record</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Audit Date</Label><Input type="date" value={auditForm.audit_date} onChange={(e) => setAuditForm({ ...auditForm, audit_date: e.target.value })} /></div>

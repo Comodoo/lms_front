@@ -381,7 +381,7 @@ export async function getRegistration(id: number | string) {
 
 // ==================== USER MANAGEMENT ====================
 export async function getStudents() {
-  const data = await apiRequest<any>('/students');
+  const data = await fetchAllPages('/registrations');
   return Array.isArray(data) ? data : [];
 }
 

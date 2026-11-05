@@ -271,7 +271,7 @@ export default function HrDetailPage() {
 
       {/* Status Dialog */}
       <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Change Employment Status</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Status</Label>
@@ -291,7 +291,7 @@ export default function HrDetailPage() {
 
       {/* Upload Document Dialog */}
       <Dialog open={docOpen} onOpenChange={setDocOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Upload Document</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Type</Label>
@@ -312,7 +312,7 @@ export default function HrDetailPage() {
 
       {/* Leave Dialog */}
       <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Request Leave</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Type</Label>
@@ -335,7 +335,7 @@ export default function HrDetailPage() {
 
       {/* Salary Placement Dialog */}
       <Dialog open={placementOpen} onOpenChange={setPlacementOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Salary Placement</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1"><Label>Grade</Label>

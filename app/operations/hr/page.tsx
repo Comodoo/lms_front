@@ -205,7 +205,7 @@ export default function HrPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit HR Profile' : 'Add HR Profile'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2"><Label>User ID</Label><Input value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })} disabled={!!editing} /></div>

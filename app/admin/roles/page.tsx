@@ -66,6 +66,7 @@ export default function AdminRolesPage() {
   const [matrixCodes, setMatrixCodes] = useState<string[]>([]);
   const [matrixDirty, setMatrixDirty] = useState(false);
   const [matrixSaving, setMatrixSaving] = useState(false);
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   // Role create/edit state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
@@ -134,6 +135,21 @@ export default function AdminRolesPage() {
     setMatrixCodes((prev) =>
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
+    setMatrixDirty(true);
+  };
+
+  const toggleExpandModule = (module: string) => {
+    setExpandedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
+      return next;
+    });
+  };
+
+  const revokeModule = (module: string, actions: { action: string }[]) => {
+    const codes = actions.map((a) => `${module}.${a.action}`);
+    setMatrixCodes((prev) => prev.filter((c) => !codes.includes(c)));
     setMatrixDirty(true);
   };
 
@@ -325,48 +341,63 @@ export default function AdminRolesPage() {
                   No roles available. Create a role to configure permissions.
                 </div>
               ) : (
-                <div className="space-y-8">
-                  {permissionGroups.map(([module, actions]) => (
-                    <div key={module}>
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                        {module}
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {actions.map((permission) => {
-                          const code = `${module}.${permission.action}`;
-                          const checked = matrixCodes.includes(code);
-                          const canToggle = !selectedMatrixRole.is_system || can('roles', 'update');
-                          return (
-                            <div
-                              key={code}
-                              className={`flex items-start gap-3 border rounded-lg p-3 transition-colors ${
-                                checked ? 'border-primary/40 bg-primary/5' : 'border-border'
-                              }`}
-                            >
-                              <Checkbox
-                                id={code}
-                                checked={checked}
-                                onCheckedChange={() => toggleMatrixCode(code)}
-                                disabled={!canToggle}
-                              />
-                              <div>
-                                <Label
-                                  htmlFor={code}
-                                  className="text-sm font-medium leading-tight block"
-                                >
-                                  {permission.label}
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-1">{code}</p>
-                                {permission.hint && (
-                                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">{permission.hint}</p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                <div className="border rounded-lg overflow-hidden bg-card">
+                  <div className="flex justify-between px-4 py-2 bg-muted/50 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div>Module</div>
+                    <div className="flex gap-24">
+                      <span>Granted</span>
+                      <span>All Actions</span>
                     </div>
-                  ))}
+                  </div>
+                  {permissionGroups.map(([module, actions]) => {
+                    const granted = actions.filter((a: any) => matrixCodes.includes(module + '.' + a.action)).length;
+                    const total = actions.length;
+                    const pct = total ? (granted / total) * 100 : 0;
+                    const expanded = expandedModules.has(module);
+                    return (
+                      <div key={module} className="border-t">
+                        <div className="flex items-center px-4 py-3 hover:bg-muted/30">
+                          <div className="flex-1 flex items-center gap-2 cursor-pointer" onClick={() => toggleExpandModule(module)}>
+                            <svg className={'w-4 h-4 text-muted-foreground transition-transform ' + (expanded ? 'rotate-0' : '-rotate-90')} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            <span className="font-medium capitalize">{module.replace(/_/g, ' ')}</span>
+                          </div>
+                          <div className="w-[250px] flex items-center gap-3">
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-primary rounded-full" style={{ width: pct + '%' }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground w-12 text-right">{granted} / {total}</span>
+                          </div>
+                          <div className="w-[140px] flex justify-end">
+                            <Button size="sm" variant="outline" className="rounded-full text-red-600 border-red-200 hover:bg-red-50" onClick={() => revokeModule(module, actions)}>
+                              Revoke all
+                            </Button>
+                          </div>
+                        </div>
+                        {expanded && (
+                          <div className="px-4 pb-3 pl-12 flex flex-wrap gap-2">
+                            {actions.map((permission: any) => {
+                              const code = module + '.' + permission.action;
+                              const checked = matrixCodes.includes(code);
+                              const canToggle = !selectedMatrixRole?.is_system || can('roles', 'update');
+                              return (
+                                <button
+                                  key={code}
+                                  type="button"
+                                  onClick={() => { if (canToggle) toggleMatrixCode(code); }}
+                                  className={'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ' + (checked ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground hover:bg-muted') + ' ' + (!canToggle ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer')}
+                                >
+                                  {checked && (
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                  )}
+                                  {permission.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

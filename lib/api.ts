@@ -7,6 +7,25 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+export type ApiErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'INSUFFICIENT_PERMISSION'
+  | 'NOT_FOUND'
+  | 'VALIDATION'
+  | 'RATE_LIMITED'
+  | 'SERVER'
+  | 'NETWORK';
+
+export const API_ERROR: Record<ApiErrorCode, ApiErrorCode> = {
+  UNAUTHENTICATED: 'UNAUTHENTICATED',
+  INSUFFICIENT_PERMISSION: 'INSUFFICIENT_PERMISSION',
+  NOT_FOUND: 'NOT_FOUND',
+  VALIDATION: 'VALIDATION',
+  RATE_LIMITED: 'RATE_LIMITED',
+  SERVER: 'SERVER',
+  NETWORK: 'NETWORK',
+};
+
 export interface Paginated<T> {
   data: T[];
   total: number;
@@ -18,6 +37,31 @@ export interface Paginated<T> {
 export interface PaginationOptions {
   page?: number;
   per_page?: number;
+}
+
+export interface RoleUser {
+  id: number | string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  roles?: { id: string; name: string }[];
+}
+
+export function isPermissionDenied(error: any): boolean {
+  if (!error) return false;
+  if (typeof error === 'object') {
+    if (error.status === 403) return true;
+    if (error.code === 'INSUFFICIENT_PERMISSION') return true;
+    if (String(error.message || '').toLowerCase().includes('permission')) return true;
+  }
+  return false;
+}
+
+export function describeApiError(error: any): string {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  return error.message || error.error || 'Request failed';
 }
 
 function isPaginated(body: unknown): body is Paginated<any> {

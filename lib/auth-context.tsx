@@ -79,6 +79,9 @@ export interface AuthContextType extends AuthState {
   canAccessAdminRoutes: () => boolean;
   canAccessAccountantRoutes: () => boolean;
   canAccessOperationsRoutes: () => boolean;
+  canAccessAdminPanel: () => boolean;
+  isSuperAdmin: () => boolean;
+  refreshProfile: () => Promise<void>;
   /** Dynamic permission check: can(module, action) */
   can: (module: string, action: string) => boolean;
   /** Dynamic permission check: canAny(module, ['view','create']) */
@@ -599,6 +602,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return state.user?.role === 'operations' || state.user?.role === 'admin';
   }, [state.user]);
 
+  const canAccessAdminPanel = useCallback((): boolean => {
+    return !!state.user?.canAccessAdminPanel || state.user?.role === 'admin';
+  }, [state.user]);
+
+  const isSuperAdmin = useCallback((): boolean => {
+    return state.user?.role === 'admin' || (state.user?.permissions || []).includes('*');
+  }, [state.user]);
+
+  const refreshProfile = useCallback(async (): Promise<void> => {
+    try {
+      const response = await authApi.me();
+      if (response.data) {
+        const { user: backendUser, roles, permissions, can_access_admin_panel } = response.data as any;
+        const roleIds = Array.isArray(roles) ? roles.map((r: any) => (typeof r === 'string' ? r : r.role_id)).filter(Boolean) : [];
+        const authUser: AuthUser = {
+          ...(state.user as any),
+          id: backendUser.id.toString(),
+          name: `${backendUser.first_name} ${backendUser.last_name}`,
+          email: backendUser.email,
+          role: backendUser.role || state.user?.role || 'student',
+          roles: roleIds,
+          permissions: Array.isArray(permissions) ? permissions : [],
+          canAccessAdminPanel: !!can_access_admin_panel,
+        };
+        setState((prev) => ({ ...prev, user: authUser }));
+        localStorage.setItem('lms-auth', JSON.stringify({ user: authUser }));
+      }
+    } catch {
+      // ignore
+    }
+  }, [state.user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -631,6 +666,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         canAny,
         canAccessAccountantRoutes,
         canAccessOperationsRoutes,
+        canAccessAdminPanel,
+        isSuperAdmin,
+        refreshProfile,
       }}
     >
       {children}

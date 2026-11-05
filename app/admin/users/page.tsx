@@ -150,7 +150,7 @@ function AdminUsersContent() {
   const openAssign = (user: RoleUser) => {
     if (!guardAssign()) return;
     setAssignTarget(user);
-    setAssignRoleIds((user.roles ?? []).map((r) => r.id));
+    setAssignRoleIds((user.roles ?? []).map((r: any) => r.id));
     setAssignError(null);
   };
 
@@ -297,7 +297,7 @@ function AdminUsersContent() {
                           <span className="text-sm text-muted-foreground">No roles assigned</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {(u.roles ?? []).map((r) => (
+                            {(u.roles ?? []).map((r: any) => (
                               <Badge key={r.id} variant="outline">
                                 {r.name}
                               </Badge>
